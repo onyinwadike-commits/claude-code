@@ -1,0 +1,162 @@
+# Kustomize overlay for staging environment
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: void-confessions-staging
+
+# Base configuration
+resources:
+  - ../../
+
+# Staging-specific labels
+commonLabels:
+  environment: staging
+
+# Staging-specific annotations
+commonAnnotations:
+  deployment.kubernetes.io/revision: "staging"
+
+# Override replicas for staging (fewer resources)
+replicas:
+  - name: api-gateway
+    count: 2
+  - name: confession-service
+    count: 2
+  - name: sentiment-service
+    count: 1
+  - name: redaction-service
+    count: 1
+  - name: web
+    count: 1
+  - name: admin
+    count: 1
+
+# Staging image tags (overridden by CD pipeline)
+images:
+  - name: void-confessions/api-gateway
+    newTag: staging
+  - name: void-confessions/confession-service
+    newTag: staging
+  - name: void-confessions/sentiment-service
+    newTag: staging
+  - name: void-confessions/redaction-service
+    newTag: staging
+  - name: void-confessions/web
+    newTag: staging
+  - name: void-confessions/admin
+    newTag: staging
+
+# Patches for staging environment
+patches:
+  # Reduce resource requests for staging
+  - patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: api-gateway
+      spec:
+        template:
+          spec:
+            containers:
+              - name: api-gateway
+                resources:
+                  requests:
+                    cpu: "100m"
+                    memory: "128Mi"
+                  limits:
+                    cpu: "500m"
+                    memory: "512Mi"
+
+  - patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: confession-service
+      spec:
+        template:
+          spec:
+            containers:
+              - name: confession-service
+                resources:
+                  requests:
+                    cpu: "100m"
+                    memory: "128Mi"
+                  limits:
+                    cpu: "500m"
+                    memory: "512Mi"
+
+  # Update ingress hosts for staging
+  - patch: |-
+      apiVersion: networking.k8s.io/v1
+      kind: Ingress
+      metadata:
+        name: void-confessions-ingress
+      spec:
+        tls:
+          - hosts:
+              - staging.voidconfessions.app
+              - staging-api.voidconfessions.app
+            secretName: tls-certificate-staging
+          - hosts:
+              - staging-admin.voidconfessions.app
+            secretName: tls-certificate-admin-staging
+        rules:
+          - host: staging.voidconfessions.app
+            http:
+              paths:
+                - path: /
+                  pathType: Prefix
+                  backend:
+                    service:
+                      name: web
+                      port:
+                        number: 3000
+          - host: staging-api.voidconfessions.app
+            http:
+              paths:
+                - path: /
+                  pathType: Prefix
+                  backend:
+                    service:
+                      name: api-gateway
+                      port:
+                        number: 3000
+          - host: staging-admin.voidconfessions.app
+            http:
+              paths:
+                - path: /
+                  pathType: Prefix
+                  backend:
+                    service:
+                      name: admin
+                      port:
+                        number: 3001
+
+  # Disable HPA min replicas for staging
+  - patch: |-
+      apiVersion: autoscaling/v2
+      kind: HorizontalPodAutoscaler
+      metadata:
+        name: api-gateway-hpa
+      spec:
+        minReplicas: 1
+        maxReplicas: 3
+
+  - patch: |-
+      apiVersion: autoscaling/v2
+      kind: HorizontalPodAutoscaler
+      metadata:
+        name: confession-service-hpa
+      spec:
+        minReplicas: 1
+        maxReplicas: 3
+
+# ConfigMap overrides for staging
+configMapGenerator:
+  - name: app-config-staging
+    behavior: merge
+    literals:
+      - NODE_ENV=staging
+      - LOG_LEVEL=debug
+      - API_BASE_URL=https://staging-api.voidconfessions.app
+      - WEB_BASE_URL=https://staging.voidconfessions.app

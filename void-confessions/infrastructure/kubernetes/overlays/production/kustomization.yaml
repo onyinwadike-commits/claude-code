@@ -1,0 +1,171 @@
+# Kustomize overlay for production environment
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: void-confessions
+
+# Base configuration
+resources:
+  - ../../
+
+# Production-specific labels
+commonLabels:
+  environment: production
+
+# Production-specific annotations
+commonAnnotations:
+  deployment.kubernetes.io/revision: "production"
+
+# Production replica counts (high availability)
+replicas:
+  - name: api-gateway
+    count: 3
+  - name: confession-service
+    count: 3
+  - name: sentiment-service
+    count: 2
+  - name: redaction-service
+    count: 2
+  - name: web
+    count: 3
+  - name: admin
+    count: 2
+
+# Production image tags (overridden by CD pipeline)
+images:
+  - name: void-confessions/api-gateway
+    newTag: latest
+  - name: void-confessions/confession-service
+    newTag: latest
+  - name: void-confessions/sentiment-service
+    newTag: latest
+  - name: void-confessions/redaction-service
+    newTag: latest
+  - name: void-confessions/web
+    newTag: latest
+  - name: void-confessions/admin
+    newTag: latest
+
+# Patches for production environment
+patches:
+  # Production resource allocation
+  - patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: api-gateway
+      spec:
+        template:
+          spec:
+            containers:
+              - name: api-gateway
+                resources:
+                  requests:
+                    cpu: "250m"
+                    memory: "256Mi"
+                  limits:
+                    cpu: "1000m"
+                    memory: "1Gi"
+            # Add pod anti-affinity for HA
+            affinity:
+              podAntiAffinity:
+                preferredDuringSchedulingIgnoredDuringExecution:
+                  - weight: 100
+                    podAffinityTerm:
+                      labelSelector:
+                        matchLabels:
+                          app: api-gateway
+                      topologyKey: kubernetes.io/hostname
+
+  - patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: confession-service
+      spec:
+        template:
+          spec:
+            containers:
+              - name: confession-service
+                resources:
+                  requests:
+                    cpu: "250m"
+                    memory: "256Mi"
+                  limits:
+                    cpu: "1000m"
+                    memory: "1Gi"
+            affinity:
+              podAntiAffinity:
+                preferredDuringSchedulingIgnoredDuringExecution:
+                  - weight: 100
+                    podAffinityTerm:
+                      labelSelector:
+                        matchLabels:
+                          app: confession-service
+                      topologyKey: kubernetes.io/hostname
+
+  - patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: web
+      spec:
+        template:
+          spec:
+            containers:
+              - name: web
+                resources:
+                  requests:
+                    cpu: "200m"
+                    memory: "256Mi"
+                  limits:
+                    cpu: "500m"
+                    memory: "512Mi"
+
+  # Production HPA settings
+  - patch: |-
+      apiVersion: autoscaling/v2
+      kind: HorizontalPodAutoscaler
+      metadata:
+        name: api-gateway-hpa
+      spec:
+        minReplicas: 3
+        maxReplicas: 10
+
+  - patch: |-
+      apiVersion: autoscaling/v2
+      kind: HorizontalPodAutoscaler
+      metadata:
+        name: confession-service-hpa
+      spec:
+        minReplicas: 3
+        maxReplicas: 10
+
+  # Production PDB settings (stricter availability)
+  - patch: |-
+      apiVersion: policy/v1
+      kind: PodDisruptionBudget
+      metadata:
+        name: api-gateway-pdb
+      spec:
+        minAvailable: 2
+
+  - patch: |-
+      apiVersion: policy/v1
+      kind: PodDisruptionBudget
+      metadata:
+        name: confession-service-pdb
+      spec:
+        minAvailable: 2
+
+# Production ConfigMap
+configMapGenerator:
+  - name: app-config-production
+    behavior: merge
+    literals:
+      - NODE_ENV=production
+      - LOG_LEVEL=info
+      - API_BASE_URL=https://api.voidconfessions.app
+      - WEB_BASE_URL=https://voidconfessions.app
+      - ENABLE_METRICS=true
+      - ENABLE_TRACING=true
