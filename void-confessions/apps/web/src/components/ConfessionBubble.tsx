@@ -1,7 +1,7 @@
 'use client';
 
-import { useRef, useEffect, useState, useCallback } from 'react';
-import { motion, useAnimation } from 'framer-motion';
+import { useRef, useState, useCallback, useEffect, useMemo } from 'react';
+import { motion, useAnimationControls, AnimatePresence } from 'framer-motion';
 import type { Confession, VoidType } from '@void-confessions/core';
 
 interface ConfessionBubbleProps {
@@ -12,31 +12,36 @@ interface ConfessionBubbleProps {
   onRemove?: (id: string) => void;
 }
 
-const voidColors: Record<VoidType, { bg: string; border: string; glow: string }> = {
+const voidColors: Record<VoidType, { bg: string; border: string; glow: string; accent: string }> = {
   grief: {
-    bg: 'bg-grief-900/40',
-    border: 'border-grief-600/30',
-    glow: 'shadow-grief-500/20',
+    bg: 'bg-grief-900/50',
+    border: 'border-grief-500/40',
+    glow: 'shadow-grief-500/40',
+    accent: '#6270f2',
   },
   rage: {
-    bg: 'bg-rage-900/40',
-    border: 'border-rage-600/30',
-    glow: 'shadow-rage-500/20',
+    bg: 'bg-rage-900/50',
+    border: 'border-rage-500/40',
+    glow: 'shadow-rage-500/40',
+    accent: '#f83b3b',
   },
   guilt: {
-    bg: 'bg-guilt-900/40',
-    border: 'border-guilt-600/30',
-    glow: 'shadow-guilt-500/20',
+    bg: 'bg-guilt-900/50',
+    border: 'border-guilt-500/40',
+    glow: 'shadow-guilt-500/40',
+    accent: '#5d7a7c',
   },
   longing: {
-    bg: 'bg-longing-900/40',
-    border: 'border-longing-600/30',
-    glow: 'shadow-longing-500/20',
+    bg: 'bg-longing-900/50',
+    border: 'border-longing-500/40',
+    glow: 'shadow-longing-500/40',
+    accent: '#fe8011',
   },
   relief: {
-    bg: 'bg-relief-900/40',
-    border: 'border-relief-600/30',
-    glow: 'shadow-relief-500/20',
+    bg: 'bg-relief-900/50',
+    border: 'border-relief-500/40',
+    glow: 'shadow-relief-500/40',
+    accent: '#16b26c',
   },
 };
 
@@ -47,24 +52,53 @@ export function ConfessionBubble({
   onEcho,
   onRemove,
 }: ConfessionBubbleProps) {
-  const controls = useAnimation();
+  const controls = useAnimationControls();
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // State
+  const [isHovered, setIsHovered] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
   const [isResonating, setIsResonating] = useState(false);
-  const [longPressTimer, setLongPressTimer] = useState<NodeJS.Timeout | null>(null);
+  const [resonanceProgress, setResonanceProgress] = useState(0);
   const [hasResonated, setHasResonated] = useState(false);
+  const [showResonanceFlash, setShowResonanceFlash] = useState(false);
+
+  const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const animationStartTimeRef = useRef<number>(0);
+  const pausedAtRef = useRef<number>(0);
 
   const colors = voidColors[voidType];
 
-  // Calculate drift duration based on content length
-  const driftDuration = 20 + (confession.content.length / 100) * 10;
+  // Calculate drift duration based on content length (10-20 seconds)
+  const driftDuration = useMemo(() => {
+    const baseDuration = 10;
+    const lengthBonus = Math.min((confession.content.length / 500) * 10, 10);
+    return baseDuration + lengthBonus;
+  }, [confession.content.length]);
+
+  // Random horizontal position (20-80% of screen width)
+  const horizontalPosition = useMemo(() => {
+    return 20 + Math.random() * 60;
+  }, []);
 
   // Start drift animation
   useEffect(() => {
+    animationStartTimeRef.current = Date.now();
+
     controls.start({
       y: '-100vh',
-      opacity: [1, 1, 0],
+      opacity: [0, 1, 1, 1, 0],
       transition: {
-        duration: driftDuration,
-        ease: 'linear',
+        y: {
+          duration: driftDuration,
+          ease: 'linear',
+        },
+        opacity: {
+          duration: driftDuration,
+          times: [0, 0.05, 0.7, 0.9, 1],
+          ease: 'easeOut',
+        },
       },
     });
 
@@ -73,112 +107,240 @@ export function ConfessionBubble({
       onRemove?.(confession.id);
     }, driftDuration * 1000);
 
-    return () => clearTimeout(timeout);
+    return () => {
+      clearTimeout(timeout);
+    };
   }, [controls, driftDuration, confession.id, onRemove]);
 
-  // Long press for resonance
+  // Handle hover pause/resume
+  useEffect(() => {
+    if (isHovered && !isPaused) {
+      // Pause animation
+      pausedAtRef.current = Date.now();
+      controls.stop();
+      setIsPaused(true);
+    } else if (!isHovered && isPaused) {
+      // Resume animation
+      const elapsedBeforePause = pausedAtRef.current - animationStartTimeRef.current;
+      const remainingDuration = (driftDuration * 1000 - elapsedBeforePause) / 1000;
+
+      if (remainingDuration > 0) {
+        controls.start({
+          y: '-100vh',
+          opacity: 0,
+          transition: {
+            y: {
+              duration: remainingDuration,
+              ease: 'linear',
+            },
+            opacity: {
+              duration: Math.min(remainingDuration, 2),
+              delay: Math.max(0, remainingDuration - 2),
+              ease: 'easeOut',
+            },
+          },
+        });
+      }
+      setIsPaused(false);
+    }
+  }, [isHovered, isPaused, controls, driftDuration]);
+
+  // Long press for resonance (1.5 seconds)
   const handlePressStart = useCallback(() => {
     if (hasResonated) return;
 
     setIsResonating(true);
-    const timer = setTimeout(() => {
+    setResonanceProgress(0);
+
+    // Progress indicator
+    const startTime = Date.now();
+    progressIntervalRef.current = setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      const progress = Math.min(elapsed / 1500, 1);
+      setResonanceProgress(progress);
+    }, 16);
+
+    // Complete resonance after 1.5s
+    longPressTimerRef.current = setTimeout(() => {
       setHasResonated(true);
-      onResonate?.(confession.id);
       setIsResonating(false);
+      setShowResonanceFlash(true);
+      onResonate?.(confession.id);
+
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+      }
+
+      // Hide flash after animation
+      setTimeout(() => setShowResonanceFlash(false), 600);
     }, 1500);
-    setLongPressTimer(timer);
   }, [confession.id, hasResonated, onResonate]);
 
   const handlePressEnd = useCallback(() => {
     setIsResonating(false);
-    if (longPressTimer) {
-      clearTimeout(longPressTimer);
-      setLongPressTimer(null);
-    }
-  }, [longPressTimer]);
+    setResonanceProgress(0);
 
-  // Format timestamp
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+    if (progressIntervalRef.current) {
+      clearInterval(progressIntervalRef.current);
+      progressIntervalRef.current = null;
+    }
+  }, []);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+      if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
+    };
+  }, []);
+
   const timeAgo = formatTimeAgo(confession.createdAt);
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 50, scale: 0.9 }}
+      ref={containerRef}
+      initial={{ opacity: 0, y: 100, scale: 0.8 }}
       animate={controls}
-      className={`
-        absolute left-1/2 bottom-0
-        max-w-md w-full px-4
-        -translate-x-1/2
-      `}
+      exit={{
+        opacity: 0,
+        scale: 0.9,
+        filter: 'blur(10px)',
+        transition: { duration: 0.5 }
+      }}
+      className="absolute w-full max-w-sm px-4"
       style={{
-        left: `${30 + Math.random() * 40}%`,
+        left: `${horizontalPosition}%`,
+        bottom: '20%',
+        transform: 'translateX(-50%)',
+      }}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => {
+        setIsHovered(false);
+        handlePressEnd();
       }}
     >
       <motion.div
         onMouseDown={handlePressStart}
         onMouseUp={handlePressEnd}
-        onMouseLeave={handlePressEnd}
         onTouchStart={handlePressStart}
         onTouchEnd={handlePressEnd}
+        onTouchCancel={handlePressEnd}
         className={`
           relative p-4 rounded-2xl
           ${colors.bg} ${colors.border}
-          backdrop-blur-sm border
-          shadow-lg ${isResonating ? colors.glow + ' shadow-xl' : ''}
-          cursor-pointer select-none
-          transition-shadow duration-300
+          backdrop-blur-md border
+          shadow-lg cursor-pointer select-none
+          transition-all duration-300
+          ${isHovered ? 'scale-105 ' + colors.glow + ' shadow-2xl' : ''}
+          ${isResonating ? colors.glow + ' shadow-2xl ring-2 ring-white/20' : ''}
         `}
-        whileHover={{ scale: 1.02 }}
+        animate={{
+          scale: isHovered ? 1.05 : 1,
+        }}
+        transition={{ type: 'spring', stiffness: 300, damping: 20 }}
       >
-        {/* Resonance progress indicator */}
+        {/* Resonance progress ring */}
         {isResonating && (
-          <motion.div
-            className="absolute inset-0 rounded-2xl overflow-hidden"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
+          <svg
+            className="absolute -inset-1 w-[calc(100%+8px)] h-[calc(100%+8px)] pointer-events-none"
+            style={{ filter: `drop-shadow(0 0 8px ${colors.accent})` }}
           >
-            <motion.div
-              className="absolute bottom-0 left-0 right-0 h-1 bg-white/30"
-              initial={{ scaleX: 0 }}
-              animate={{ scaleX: 1 }}
-              transition={{ duration: 1.5, ease: 'linear' }}
-              style={{ transformOrigin: 'left' }}
+            <rect
+              x="4"
+              y="4"
+              width="calc(100% - 8px)"
+              height="calc(100% - 8px)"
+              rx="16"
+              ry="16"
+              fill="none"
+              stroke={colors.accent}
+              strokeWidth="2"
+              strokeDasharray={`${resonanceProgress * 100}% 100%`}
+              className="transition-all duration-75"
             />
+          </svg>
+        )}
+
+        {/* Resonance flash effect */}
+        <AnimatePresence>
+          {showResonanceFlash && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1.2 }}
+              exit={{ opacity: 0, scale: 1.5 }}
+              className="absolute inset-0 rounded-2xl pointer-events-none"
+              style={{
+                background: `radial-gradient(circle, ${colors.accent}40 0%, transparent 70%)`,
+              }}
+            />
+          )}
+        </AnimatePresence>
+
+        {/* Pause indicator */}
+        {isHovered && isPaused && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="absolute -top-8 left-1/2 -translate-x-1/2 text-white/60 text-xs flex items-center gap-1"
+          >
+            <span className="w-2 h-2 bg-white/60 rounded-sm" />
+            <span className="w-2 h-2 bg-white/60 rounded-sm" />
+            <span className="ml-1">Paused</span>
           </motion.div>
         )}
 
         {/* Content */}
-        <p className="text-white/90 text-sm leading-relaxed">{confession.content}</p>
+        <p className="text-white/90 text-sm leading-relaxed whitespace-pre-wrap">
+          {confession.content}
+        </p>
 
         {/* Footer */}
-        <div className="flex items-center justify-between mt-3 text-xs text-white/40">
+        <div className="flex items-center justify-between mt-3 text-xs text-white/50">
           <span>{timeAgo}</span>
           <div className="flex items-center gap-3">
-            {confession.resonanceCount > 0 && (
-              <span className="flex items-center gap-1">
+            {(confession.resonanceCount ?? 0) > 0 && (
+              <motion.span
+                className="flex items-center gap-1"
+                initial={false}
+                animate={{ scale: hasResonated ? [1, 1.2, 1] : 1 }}
+              >
                 <span>💫</span>
-                {confession.resonanceCount}
-              </span>
+                <span>{confession.resonanceCount}</span>
+              </motion.span>
             )}
-            {confession.echoCount > 0 && (
+            {(confession.echoCount ?? 0) > 0 && (
               <span className="flex items-center gap-1">
                 <span>🔊</span>
-                {confession.echoCount}
+                <span>{confession.echoCount}</span>
               </span>
             )}
           </div>
         </div>
 
-        {/* Resonance glow effect */}
+        {/* Hold instruction on hover */}
+        {isHovered && !hasResonated && !isResonating && (
+          <motion.div
+            initial={{ opacity: 0, y: 5 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-white/40 text-xs whitespace-nowrap"
+          >
+            Hold to resonate
+          </motion.div>
+        )}
+
+        {/* Resonated badge */}
         {hasResonated && (
           <motion.div
-            className="absolute inset-0 rounded-2xl pointer-events-none"
-            initial={{ opacity: 0.5 }}
-            animate={{ opacity: 0 }}
-            transition={{ duration: 1 }}
-            style={{
-              background: 'radial-gradient(circle, rgba(255,255,255,0.2) 0%, transparent 70%)',
-            }}
-          />
+            initial={{ opacity: 0, scale: 0 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="absolute -top-2 -right-2 w-6 h-6 bg-void-600 rounded-full flex items-center justify-center text-sm"
+          >
+            💫
+          </motion.div>
         )}
       </motion.div>
     </motion.div>
