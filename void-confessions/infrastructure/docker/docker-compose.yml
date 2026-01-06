@@ -1,0 +1,87 @@
+version: '3.8'
+
+services:
+  api-gateway:
+    build:
+      context: ../../
+      dockerfile: infrastructure/docker/Dockerfile.api-gateway
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+      - CONFESSION_SERVICE_URL=http://confession-service:3001
+      - REDACTION_SERVICE_URL=http://redaction-service:8001
+      - SENTIMENT_SERVICE_URL=http://sentiment-service:8002
+    depends_on:
+      - confession-service
+      - redaction-service
+      - sentiment-service
+    networks:
+      - void-network
+
+  confession-service:
+    build:
+      context: ../../
+      dockerfile: infrastructure/docker/Dockerfile.confession-service
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=development
+      - PORT=3001
+    networks:
+      - void-network
+
+  redaction-service:
+    build:
+      context: ../../services/redaction-service
+      dockerfile: Dockerfile
+    ports:
+      - "8001:8001"
+    environment:
+      - PYTHONUNBUFFERED=1
+    networks:
+      - void-network
+
+  sentiment-service:
+    build:
+      context: ../../services/sentiment-service
+      dockerfile: Dockerfile
+    ports:
+      - "8002:8002"
+    environment:
+      - PYTHONUNBUFFERED=1
+    networks:
+      - void-network
+
+  web:
+    build:
+      context: ../../
+      dockerfile: infrastructure/docker/Dockerfile.web
+    ports:
+      - "3002:3000"
+    environment:
+      - NODE_ENV=development
+      - NEXT_PUBLIC_API_URL=http://localhost:3000
+    depends_on:
+      - api-gateway
+    networks:
+      - void-network
+
+  admin:
+    build:
+      context: ../../
+      dockerfile: infrastructure/docker/Dockerfile.admin
+    ports:
+      - "3003:3001"
+    environment:
+      - NODE_ENV=development
+      - NEXT_PUBLIC_API_URL=http://localhost:3000
+    depends_on:
+      - api-gateway
+    networks:
+      - void-network
+
+networks:
+  void-network:
+    driver: bridge

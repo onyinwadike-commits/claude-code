@@ -1,0 +1,42 @@
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+
+# Copy root package files
+COPY package.json package-lock.json* ./
+COPY turbo.json ./
+
+# Copy workspace package.json files
+COPY packages/core/package.json ./packages/core/
+COPY packages/ui/package.json ./packages/ui/
+COPY apps/web/package.json ./apps/web/
+
+# Install dependencies
+RUN npm install
+
+# Copy source code
+COPY packages/core/ ./packages/core/
+COPY packages/ui/ ./packages/ui/
+COPY apps/web/ ./apps/web/
+COPY tsconfig.json ./
+
+# Build
+RUN npm run build --workspace=@void-confessions/core
+RUN npm run build --workspace=@void-confessions/ui
+RUN npm run build --workspace=@void-confessions/web
+
+# Production stage
+FROM node:20-alpine
+
+WORKDIR /app
+
+COPY --from=builder /app/apps/web/.next ./apps/web/.next
+COPY --from=builder /app/apps/web/public ./apps/web/public
+COPY --from=builder /app/apps/web/package.json ./apps/web/
+COPY --from=builder /app/node_modules ./node_modules
+
+WORKDIR /app/apps/web
+
+EXPOSE 3000
+
+CMD ["npm", "start"]

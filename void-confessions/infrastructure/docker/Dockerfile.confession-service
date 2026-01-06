@@ -1,0 +1,40 @@
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+
+# Copy root package files
+COPY package.json package-lock.json* ./
+COPY turbo.json ./
+
+# Copy workspace package.json files
+COPY packages/core/package.json ./packages/core/
+COPY services/confession-service/package.json ./services/confession-service/
+
+# Install dependencies
+RUN npm install
+
+# Copy source code
+COPY packages/core/ ./packages/core/
+COPY services/confession-service/ ./services/confession-service/
+COPY tsconfig.json ./
+
+# Build
+RUN npm run build --workspace=@void-confessions/core
+RUN npm run build --workspace=@void-confessions/confession-service
+
+# Production stage
+FROM node:20-alpine
+
+WORKDIR /app
+
+COPY --from=builder /app/packages/core/dist ./packages/core/dist
+COPY --from=builder /app/packages/core/package.json ./packages/core/
+COPY --from=builder /app/services/confession-service/dist ./services/confession-service/dist
+COPY --from=builder /app/services/confession-service/package.json ./services/confession-service/
+COPY --from=builder /app/node_modules ./node_modules
+
+WORKDIR /app/services/confession-service
+
+EXPOSE 3001
+
+CMD ["node", "dist/index.js"]

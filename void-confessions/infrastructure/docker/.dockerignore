@@ -1,0 +1,15 @@
+node_modules
+.next
+dist
+build
+.turbo
+*.log
+.git
+.gitignore
+*.md
+.env*
+coverage
+__pycache__
+*.pyc
+.venv
+venv
