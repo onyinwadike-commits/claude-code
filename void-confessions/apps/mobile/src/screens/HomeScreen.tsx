@@ -1,199 +1,180 @@
-import React, { useState } from 'react';
+import React, { useEffect } from 'react';
 import {
   View,
   Text,
-  TextInput,
   TouchableOpacity,
   StyleSheet,
-  ScrollView,
-  KeyboardAvoidingView,
-  Platform,
+  Dimensions,
 } from 'react-native';
-import { validateConfessionContent, CONFESSION_MAX_LENGTH } from '@void-confessions/core';
+import { useNavigation } from '@react-navigation/native';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withRepeat,
+  withTiming,
+  withSequence,
+  Easing,
+} from 'react-native-reanimated';
+import type { HomeScreenProps } from '../navigation';
 
-export function HomeScreen() {
-  const [confession, setConfession] = useState('');
-  const [error, setError] = useState<string | undefined>();
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
+const { width, height } = Dimensions.get('window');
 
-  const handleSubmit = async () => {
-    const validation = validateConfessionContent(confession);
-    if (!validation.valid) {
-      setError(validation.error);
-      return;
-    }
+export function HomeScreen(): React.JSX.Element {
+  const navigation = useNavigation<HomeScreenProps['navigation']>();
 
-    setError(undefined);
-    setIsSubmitting(true);
+  // Pulsing animation for the void
+  const scale = useSharedValue(1);
+  const opacity = useSharedValue(0.6);
 
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-
-    setIsSubmitting(false);
-    setSubmitted(true);
-    setConfession('');
-  };
-
-  if (submitted) {
-    return (
-      <View style={styles.container}>
-        <View style={styles.successCard}>
-          <Text style={styles.successEmoji}>🌌</Text>
-          <Text style={styles.successTitle}>Your confession has been sent into the void</Text>
-          <Text style={styles.successMessage}>
-            It will be reviewed and may appear anonymously soon.
-          </Text>
-          <TouchableOpacity style={styles.button} onPress={() => setSubmitted(false)}>
-            <Text style={styles.buttonText}>Share Another</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+  useEffect(() => {
+    scale.value = withRepeat(
+      withSequence(
+        withTiming(1.1, { duration: 2000, easing: Easing.inOut(Easing.ease) }),
+        withTiming(1, { duration: 2000, easing: Easing.inOut(Easing.ease) })
+      ),
+      -1,
+      true
     );
-  }
+
+    opacity.value = withRepeat(
+      withSequence(
+        withTiming(0.8, { duration: 2000, easing: Easing.inOut(Easing.ease) }),
+        withTiming(0.6, { duration: 2000, easing: Easing.inOut(Easing.ease) })
+      ),
+      -1,
+      true
+    );
+  }, []);
+
+  const animatedVoidStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+    opacity: opacity.value,
+  }));
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={styles.container}
-    >
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        <View style={styles.header}>
-          <Text style={styles.title}>Void Confessions</Text>
-          <Text style={styles.subtitle}>Share your thoughts anonymously into the void</Text>
-        </View>
+    <View style={styles.container}>
+      {/* Void visual */}
+      <View style={styles.voidContainer}>
+        <Animated.View style={[styles.voidOuter, animatedVoidStyle]}>
+          <View style={styles.voidMiddle}>
+            <View style={styles.voidInner} />
+          </View>
+        </Animated.View>
+      </View>
 
-        <View style={styles.card}>
-          <Text style={styles.label}>Your Confession</Text>
-          <TextInput
-            style={[styles.input, error && styles.inputError]}
-            placeholder="What would you like to confess to the void?"
-            placeholderTextColor="#9ca3af"
-            value={confession}
-            onChangeText={setConfession}
-            multiline
-            numberOfLines={6}
-            textAlignVertical="top"
-          />
-          {error ? (
-            <Text style={styles.errorText}>{error}</Text>
-          ) : (
-            <Text style={styles.helperText}>
-              {confession.length}/{CONFESSION_MAX_LENGTH} characters
-            </Text>
-          )}
+      {/* Content */}
+      <View style={styles.content}>
+        <Text style={styles.title}>Void Confessions</Text>
+        <Text style={styles.subtitle}>
+          Release your thoughts into the void{'\n'}
+          They won't last forever
+        </Text>
 
-          <TouchableOpacity
-            style={[styles.button, (!confession.trim() || isSubmitting) && styles.buttonDisabled]}
-            onPress={handleSubmit}
-            disabled={!confession.trim() || isSubmitting}
-          >
-            <Text style={styles.buttonText}>
-              {isSubmitting ? 'Sending...' : 'Send to the Void'}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+        <TouchableOpacity
+          style={styles.enterButton}
+          onPress={() => navigation.navigate('VoidSelect')}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.enterButtonText}>Enter the Void</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Settings button */}
+      <TouchableOpacity
+        style={styles.settingsButton}
+        onPress={() => navigation.navigate('Settings')}
+      >
+        <Text style={styles.settingsIcon}>⚙</Text>
+      </TouchableOpacity>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#0a0a0a',
   },
-  scrollContent: {
-    padding: 16,
-  },
-  header: {
+  voidContainer: {
+    position: 'absolute',
+    top: height * 0.15,
+    left: 0,
+    right: 0,
     alignItems: 'center',
-    marginBottom: 24,
-    marginTop: 16,
+  },
+  voidOuter: {
+    width: width * 0.7,
+    height: width * 0.7,
+    borderRadius: width * 0.35,
+    backgroundColor: '#1a1a2e',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#7c3aed',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 40,
+    elevation: 10,
+  },
+  voidMiddle: {
+    width: '70%',
+    height: '70%',
+    borderRadius: width * 0.25,
+    backgroundColor: '#0f0f1a',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  voidInner: {
+    width: '50%',
+    height: '50%',
+    borderRadius: width * 0.15,
+    backgroundColor: '#050508',
+  },
+  content: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    paddingBottom: 80,
+    paddingHorizontal: 24,
   },
   title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#4c1d95',
-    marginBottom: 8,
+    fontSize: 32,
+    fontWeight: '700',
+    color: '#ffffff',
+    marginBottom: 12,
+    letterSpacing: 1,
   },
   subtitle: {
     fontSize: 16,
-    color: '#6b7280',
+    color: '#8b8b9a',
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 40,
   },
-  card: {
-    backgroundColor: '#ffffff',
-    borderRadius: 12,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#374151',
-    marginBottom: 8,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    minHeight: 150,
-    color: '#1f2937',
-  },
-  inputError: {
-    borderColor: '#ef4444',
-  },
-  helperText: {
-    fontSize: 12,
-    color: '#6b7280',
-    marginTop: 4,
-  },
-  errorText: {
-    fontSize: 12,
-    color: '#ef4444',
-    marginTop: 4,
-  },
-  button: {
+  enterButton: {
     backgroundColor: '#7c3aed',
-    borderRadius: 8,
-    padding: 14,
-    alignItems: 'center',
-    marginTop: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 48,
+    borderRadius: 30,
+    shadowColor: '#7c3aed',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    elevation: 8,
   },
-  buttonDisabled: {
-    backgroundColor: '#c4b5fd',
-  },
-  buttonText: {
+  enterButtonText: {
     color: '#ffffff',
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '600',
+    letterSpacing: 0.5,
   },
-  successCard: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
+  settingsButton: {
+    position: 'absolute',
+    top: 60,
+    right: 20,
+    padding: 10,
   },
-  successEmoji: {
-    fontSize: 48,
-    marginBottom: 16,
-  },
-  successTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#1f2937',
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  successMessage: {
-    fontSize: 16,
-    color: '#6b7280',
-    textAlign: 'center',
-    marginBottom: 24,
+  settingsIcon: {
+    fontSize: 24,
+    color: '#6b6b7a',
   },
 });

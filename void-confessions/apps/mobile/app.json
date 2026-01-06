@@ -1,4 +1,42 @@
 {
   "name": "VoidConfessions",
-  "displayName": "Void Confessions"
+  "displayName": "Void Confessions",
+  "expo": {
+    "name": "Void Confessions",
+    "slug": "void-confessions",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0a0a0a"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.voidconfessions.app",
+      "buildNumber": "1",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "Allow microphone access to record voice confessions"
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0a0a0a"
+      },
+      "package": "com.voidconfessions.app",
+      "versionCode": 1,
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
+    },
+    "plugins": [
+      "expo-av"
+    ]
+  }
 }

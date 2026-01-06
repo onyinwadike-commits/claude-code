@@ -11,6 +11,18 @@ const config = {
       path.resolve(projectRoot, 'node_modules'),
       path.resolve(monorepoRoot, 'node_modules'),
     ],
+    // Required for react-native-skia
+    extraNodeModules: {
+      '@void-confessions/core': path.resolve(monorepoRoot, 'packages/core'),
+    },
+  },
+  transformer: {
+    getTransformOptions: async () => ({
+      transform: {
+        experimentalImportSupport: false,
+        inlineRequires: true,
+      },
+    }),
   },
 };
 

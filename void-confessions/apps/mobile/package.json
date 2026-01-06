@@ -1,6 +1,6 @@
 {
   "name": "@void-confessions/mobile",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "private": true,
   "scripts": {
     "android": "react-native run-android",
@@ -10,12 +10,35 @@
     "build": "echo 'Use native build tools'",
     "lint": "eslint src/",
     "typecheck": "tsc --noEmit",
-    "clean": "rm -rf android/build ios/build"
+    "clean": "rm -rf android/build ios/build",
+    "pod-install": "cd ios && pod install",
+    "reset-cache": "react-native start --reset-cache"
   },
   "dependencies": {
     "@void-confessions/core": "*",
     "react": "18.2.0",
-    "react-native": "0.73.0"
+    "react-native": "0.73.0",
+
+    "@react-navigation/native": "^6.1.9",
+    "@react-navigation/native-stack": "^6.9.17",
+    "react-native-screens": "^3.29.0",
+    "react-native-safe-area-context": "^4.8.2",
+
+    "react-native-reanimated": "^3.6.1",
+    "react-native-gesture-handler": "^2.14.0",
+
+    "@shopify/react-native-skia": "^0.1.221",
+
+    "zustand": "^4.4.7",
+    "immer": "^10.0.3",
+
+    "socket.io-client": "^4.7.2",
+
+    "expo": "~50.0.0",
+    "expo-av": "~13.10.0",
+    "expo-modules-core": "~1.11.0",
+
+    "react-native-purchases": "^7.11.0"
   },
   "devDependencies": {
     "@babel/core": "^7.23.0",
