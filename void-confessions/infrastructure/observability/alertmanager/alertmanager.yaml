@@ -1,0 +1,209 @@
+# AlertManager Configuration for Void Confessions
+
+global:
+  # Default SMTP settings
+  smtp_smarthost: 'smtp.sendgrid.net:587'
+  smtp_from: 'alerts@voidconfessions.app'
+  smtp_auth_username: 'apikey'
+  smtp_auth_password: '${SENDGRID_API_KEY}'
+  smtp_require_tls: true
+
+  # Slack API URL
+  slack_api_url: '${SLACK_WEBHOOK_URL}'
+
+  # PagerDuty
+  pagerduty_url: 'https://events.pagerduty.com/v2/enqueue'
+
+  # Resolve timeout
+  resolve_timeout: 5m
+
+# Templates
+templates:
+  - '/etc/alertmanager/templates/*.tmpl'
+
+# Inhibition rules - prevent duplicate alerts
+inhibit_rules:
+  # If critical, suppress warning for same alertname
+  - source_matchers:
+      - severity="critical"
+    target_matchers:
+      - severity="warning"
+    equal: ['alertname', 'service']
+
+  # If service is down, suppress other alerts for that service
+  - source_matchers:
+      - alertname="ServiceDown"
+    target_matchers:
+      - severity=~"warning|critical"
+    equal: ['service']
+
+# Routing tree
+route:
+  # Default receiver
+  receiver: 'slack-notifications'
+
+  # Group alerts by these labels
+  group_by: ['alertname', 'service', 'severity']
+
+  # Wait before sending first notification
+  group_wait: 30s
+
+  # Wait before sending updated notifications
+  group_interval: 5m
+
+  # Resend interval
+  repeat_interval: 4h
+
+  # Child routes
+  routes:
+    # Critical alerts - PagerDuty + Slack
+    - matchers:
+        - severity="critical"
+      receiver: 'pagerduty-critical'
+      continue: true  # Also send to default receiver
+      group_wait: 10s
+      repeat_interval: 1h
+
+    # Service down alerts - immediate escalation
+    - matchers:
+        - alertname="ServiceDown"
+      receiver: 'pagerduty-critical'
+      group_wait: 0s
+      repeat_interval: 5m
+
+    # Moderation queue alerts - dedicated channel
+    - matchers:
+        - alertname=~"Moderation.*"
+      receiver: 'slack-moderation'
+      group_by: ['alertname']
+      repeat_interval: 30m
+
+    # Crisis intervention alerts - special handling
+    - matchers:
+        - alertname=~".*Crisis.*"
+      receiver: 'slack-crisis'
+      group_wait: 0s
+      repeat_interval: 15m
+
+    # Warning alerts - Slack only
+    - matchers:
+        - severity="warning"
+      receiver: 'slack-notifications'
+      repeat_interval: 6h
+
+    # Infrastructure alerts
+    - matchers:
+        - alertname=~"Redis.*|Database.*|Pod.*"
+      receiver: 'slack-infrastructure'
+      group_by: ['alertname', 'instance']
+
+# Receivers
+receivers:
+  # Default Slack channel
+  - name: 'slack-notifications'
+    slack_configs:
+      - channel: '#void-alerts'
+        username: 'Void Sentinel'
+        icon_emoji: ':void:'
+        send_resolved: true
+        title: '{{ if eq .Status "firing" }}🚨{{ else }}✅{{ end }} {{ .CommonAnnotations.summary }}'
+        text: |
+          {{ range .Alerts }}
+          *Alert:* {{ .Annotations.summary }}
+          *Description:* {{ .Annotations.description }}
+          *Severity:* {{ .Labels.severity }}
+          *Service:* {{ .Labels.service }}
+          {{ if .Annotations.runbook_url }}*Runbook:* {{ .Annotations.runbook_url }}{{ end }}
+          {{ end }}
+        actions:
+          - type: button
+            text: 'View in Grafana'
+            url: 'https://grafana.voidconfessions.app/d/void-overview'
+          - type: button
+            text: 'Silence Alert'
+            url: '{{ template "__alertmanagerURL" . }}/#/silences/new?filter=%7Balertname%3D%22{{ .CommonLabels.alertname }}%22%7D'
+
+  # Moderation team channel
+  - name: 'slack-moderation'
+    slack_configs:
+      - channel: '#void-moderation-alerts'
+        username: 'Moderation Bot'
+        icon_emoji: ':shield:'
+        send_resolved: true
+        title: '{{ if eq .Status "firing" }}⚠️{{ else }}✅{{ end }} Moderation Alert'
+        text: |
+          {{ range .Alerts }}
+          *Alert:* {{ .Annotations.summary }}
+          *Details:* {{ .Annotations.description }}
+          *Queue Depth:* {{ .Labels.queue_depth }}
+          {{ end }}
+        actions:
+          - type: button
+            text: 'Open Moderation Console'
+            url: 'https://admin.voidconfessions.app/moderation'
+
+  # Crisis alerts channel
+  - name: 'slack-crisis'
+    slack_configs:
+      - channel: '#void-crisis-alerts'
+        username: 'Crisis Monitor'
+        icon_emoji: ':heart:'
+        send_resolved: true
+        title: '{{ if eq .Status "firing" }}🆘{{ else }}✅{{ end }} Crisis Intervention Alert'
+        text: |
+          {{ range .Alerts }}
+          *Alert:* {{ .Annotations.summary }}
+          *Description:* {{ .Annotations.description }}
+          *Note:* This is an aggregated metric. No user data is exposed.
+          {{ end }}
+
+  # Infrastructure channel
+  - name: 'slack-infrastructure'
+    slack_configs:
+      - channel: '#void-infrastructure'
+        username: 'Infra Bot'
+        icon_emoji: ':gear:'
+        send_resolved: true
+        title: '{{ if eq .Status "firing" }}🔧{{ else }}✅{{ end }} Infrastructure Alert'
+        text: |
+          {{ range .Alerts }}
+          *Alert:* {{ .Annotations.summary }}
+          *Description:* {{ .Annotations.description }}
+          *Instance:* {{ .Labels.instance }}
+          {{ if .Annotations.runbook_url }}*Runbook:* {{ .Annotations.runbook_url }}{{ end }}
+          {{ end }}
+
+  # PagerDuty for critical alerts
+  - name: 'pagerduty-critical'
+    pagerduty_configs:
+      - service_key: '${PAGERDUTY_SERVICE_KEY}'
+        send_resolved: true
+        severity: '{{ if eq .CommonLabels.severity "critical" }}critical{{ else }}warning{{ end }}'
+        description: '{{ .CommonAnnotations.summary }}'
+        details:
+          alertname: '{{ .CommonLabels.alertname }}'
+          service: '{{ .CommonLabels.service }}'
+          description: '{{ .CommonAnnotations.description }}'
+          runbook: '{{ .CommonAnnotations.runbook_url }}'
+
+  # Email for critical (backup)
+  - name: 'email-critical'
+    email_configs:
+      - to: 'oncall@voidconfessions.app'
+        send_resolved: true
+        headers:
+          Subject: '[VOID CRITICAL] {{ .CommonAnnotations.summary }}'
+        html: |
+          <h2>{{ .CommonAnnotations.summary }}</h2>
+          <p>{{ .CommonAnnotations.description }}</p>
+          <table>
+            <tr><td>Severity:</td><td>{{ .CommonLabels.severity }}</td></tr>
+            <tr><td>Service:</td><td>{{ .CommonLabels.service }}</td></tr>
+            <tr><td>Time:</td><td>{{ .StartsAt }}</td></tr>
+          </table>
+          {{ if .CommonAnnotations.runbook_url }}
+          <p><a href="{{ .CommonAnnotations.runbook_url }}">View Runbook</a></p>
+          {{ end }}
+
+  # Null receiver (for silenced alerts)
+  - name: 'null'

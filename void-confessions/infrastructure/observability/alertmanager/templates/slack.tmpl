@@ -1,0 +1,25 @@
+{{ define "slack.void.title" }}
+{{ if eq .Status "firing" }}🚨{{ else }}✅{{ end }} [{{ .Status | toUpper }}] {{ .CommonAnnotations.summary }}
+{{ end }}
+
+{{ define "slack.void.text" }}
+{{ range .Alerts }}
+*Alert:* {{ .Annotations.summary }}
+*Description:* {{ .Annotations.description }}
+*Severity:* `{{ .Labels.severity }}`
+*Service:* `{{ .Labels.service }}`
+*Started:* {{ .StartsAt.Format "2006-01-02 15:04:05 UTC" }}
+{{ if .Annotations.runbook_url }}*Runbook:* <{{ .Annotations.runbook_url }}|View Runbook>{{ end }}
+---
+{{ end }}
+{{ end }}
+
+{{ define "slack.void.color" }}
+{{ if eq .Status "firing" }}
+  {{ if eq .CommonLabels.severity "critical" }}danger{{ else }}warning{{ end }}
+{{ else }}good{{ end }}
+{{ end }}
+
+{{ define "slack.void.footer" }}
+Void Confessions Monitoring • {{ .ExternalURL }}
+{{ end }}

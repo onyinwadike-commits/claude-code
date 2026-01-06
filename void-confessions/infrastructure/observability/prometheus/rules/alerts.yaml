@@ -1,0 +1,249 @@
+# Prometheus Alerting Rules for Void Confessions
+
+groups:
+  # Error rate alerts
+  - name: void_error_alerts
+    rules:
+      # Alert: Error rate > 1%
+      - alert: HighErrorRate
+        expr: void:http_error_rate:ratio > 0.01
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High error rate detected on {{ $labels.service }}"
+          description: "Error rate is {{ $value | humanizePercentage }} (threshold: 1%)"
+          runbook_url: "https://wiki.voidconfessions.app/runbooks/high-error-rate"
+
+      # Alert: Error rate > 5% (critical)
+      - alert: CriticalErrorRate
+        expr: void:http_error_rate:ratio > 0.05
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical error rate on {{ $labels.service }}"
+          description: "Error rate is {{ $value | humanizePercentage }} (threshold: 5%)"
+          runbook_url: "https://wiki.voidconfessions.app/runbooks/critical-error-rate"
+
+      # Alert: Elevated 4xx errors
+      - alert: HighClientErrorRate
+        expr: void:http_client_error_rate:ratio > 0.10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High client error rate on {{ $labels.service }}"
+          description: "Client error rate is {{ $value | humanizePercentage }}"
+
+  # Moderation queue alerts
+  - name: void_moderation_alerts
+    rules:
+      # Alert: Moderation queue > 100
+      - alert: ModerationQueueHigh
+        expr: void:moderation_queue_depth:sum > 100
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Moderation queue depth is high"
+          description: "Queue depth: {{ $value }} items (threshold: 100)"
+          runbook_url: "https://wiki.voidconfessions.app/runbooks/moderation-queue"
+
+      # Alert: Moderation queue > 500 (critical)
+      - alert: ModerationQueueCritical
+        expr: void:moderation_queue_depth:sum > 500
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Moderation queue is critically high"
+          description: "Queue depth: {{ $value }} items. Immediate attention required."
+          runbook_url: "https://wiki.voidconfessions.app/runbooks/moderation-queue-critical"
+
+      # Alert: High-priority items in queue
+      - alert: HighPriorityModerationBacklog
+        expr: sum(void_moderation_queue_depth{priority="high"}) > 20
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High-priority moderation items waiting"
+          description: "{{ $value }} high-priority items in moderation queue"
+
+      # Alert: Sensitive topics backlog
+      - alert: SensitiveTopicsBacklog
+        expr: sum(void_moderation_queue_depth{flag_reason="sensitive_topic"}) > 50
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Sensitive topics moderation backlog"
+          description: "{{ $value }} sensitive topic items awaiting review"
+
+  # Service health alerts
+  - name: void_service_alerts
+    rules:
+      # Alert: Service unhealthy
+      - alert: ServiceUnhealthy
+        expr: void:service_health:avg < 1
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Service {{ $labels.service }} is unhealthy"
+          description: "Health check failing for {{ $labels.service }}"
+          runbook_url: "https://wiki.voidconfessions.app/runbooks/service-unhealthy"
+
+      # Alert: Service down
+      - alert: ServiceDown
+        expr: up{job=~"api-gateway|confession-service|sentiment-service|redaction-service"} == 0
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Service {{ $labels.job }} is down"
+          description: "Prometheus cannot scrape {{ $labels.job }}"
+          runbook_url: "https://wiki.voidconfessions.app/runbooks/service-down"
+
+      # Alert: High latency
+      - alert: HighLatency
+        expr: void:http_latency_p95:quantile > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High latency on {{ $labels.service }}"
+          description: "P95 latency is {{ $value | humanizeDuration }}"
+
+      # Alert: Critical latency
+      - alert: CriticalLatency
+        expr: void:http_latency_p99:quantile > 5
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical latency on {{ $labels.service }}"
+          description: "P99 latency is {{ $value | humanizeDuration }}"
+
+  # WebSocket alerts
+  - name: void_websocket_alerts
+    rules:
+      # Alert: WebSocket connection spike
+      - alert: WebSocketConnectionSpike
+        expr: |
+          (void:websocket_connections_total:sum - void:websocket_connections_total:sum offset 5m)
+          / void:websocket_connections_total:sum offset 5m > 0.5
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Sudden spike in WebSocket connections"
+          description: "Connection count increased by {{ $value | humanizePercentage }} in 5 minutes"
+
+      # Alert: Low WebSocket connections (potential issue)
+      - alert: WebSocketConnectionsDrop
+        expr: |
+          void:websocket_connections_total:sum < 10
+          and void:websocket_connections_total:sum offset 10m > 100
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "WebSocket connections dropped significantly"
+          description: "Current connections: {{ $value }}, was >100 10 minutes ago"
+
+  # Crisis intervention alerts
+  - name: void_crisis_alerts
+    rules:
+      # Alert: High crisis intervention rate
+      - alert: HighCrisisInterventionRate
+        expr: sum(increase(void_crisis_interventions_total[1h])) > 50
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Elevated crisis interventions"
+          description: "{{ $value }} crisis interventions in the last hour"
+
+      # Alert: Critical severity crisis spike
+      - alert: CriticalCrisisSpike
+        expr: sum(increase(void_crisis_interventions_total{severity="critical"}[15m])) > 10
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Spike in critical-severity crisis detections"
+          description: "{{ $value }} critical crisis interventions in 15 minutes"
+
+  # Infrastructure alerts
+  - name: void_infrastructure_alerts
+    rules:
+      # Alert: Redis connection issues
+      - alert: RedisConnectionFailure
+        expr: void_redis_connection{status="connected"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis connection failure"
+          description: "Cannot connect to Redis instance {{ $labels.instance }}"
+
+      # Alert: Database connection pool exhausted
+      - alert: DatabasePoolExhausted
+        expr: void_db_connection_pool{status="available"} < 5
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Database connection pool nearly exhausted"
+          description: "Only {{ $value }} connections available"
+
+      # Alert: High memory usage
+      - alert: HighMemoryUsage
+        expr: |
+          (
+            container_memory_usage_bytes{namespace="void-confessions"}
+            / container_spec_memory_limit_bytes{namespace="void-confessions"}
+          ) > 0.85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage in {{ $labels.pod }}"
+          description: "Memory usage is at {{ $value | humanizePercentage }}"
+
+      # Alert: Pod restart
+      - alert: PodRestarting
+        expr: increase(kube_pod_container_status_restarts_total{namespace="void-confessions"}[1h]) > 3
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Pod {{ $labels.pod }} restarting frequently"
+          description: "{{ $value }} restarts in the last hour"
+
+  # Void-specific alerts
+  - name: void_activity_alerts
+    rules:
+      # Alert: Void activity anomaly (sudden drop)
+      - alert: VoidActivityDrop
+        expr: |
+          void:weather_activity:score < 10
+          and void:weather_activity:score offset 30m > 50
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Activity dropped in void {{ $labels.void_id }}"
+          description: "Activity score is {{ $value }}, was >50 thirty minutes ago"
+
+      # Alert: High block rate in void
+      - alert: HighBlockRate
+        expr: void:confession_block_rate:ratio > 0.20
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High block rate in void {{ $labels.void_id }}"
+          description: "{{ $value | humanizePercentage }} of confessions being blocked"

@@ -1,0 +1,200 @@
+# Prometheus Recording Rules for Void Confessions
+# Pre-computed metrics for dashboard efficiency
+
+groups:
+  # Confession metrics
+  - name: void_confession_rules
+    interval: 30s
+    rules:
+      # Confessions per minute by void
+      - record: void:confessions_per_minute:rate1m
+        expr: sum(rate(void_confessions_count[1m])) by (void_id)
+
+      # Total confessions per minute (all voids)
+      - record: void:confessions_per_minute_total:rate1m
+        expr: sum(rate(void_confessions_count[1m]))
+
+      # Confessions per minute by status
+      - record: void:confessions_by_status_per_minute:rate1m
+        expr: sum(rate(void_confessions_total[1m])) by (void_id, status)
+
+      # Block rate
+      - record: void:confession_block_rate:ratio
+        expr: |
+          sum(rate(void_confessions_total{status="blocked"}[5m])) by (void_id)
+          /
+          sum(rate(void_confessions_total[5m])) by (void_id)
+
+      # Flag rate
+      - record: void:confession_flag_rate:ratio
+        expr: |
+          sum(rate(void_confessions_total{status="flagged"}[5m])) by (void_id)
+          /
+          sum(rate(void_confessions_total[5m])) by (void_id)
+
+  # Resonance metrics
+  - name: void_resonance_rules
+    interval: 30s
+    rules:
+      # Resonances per minute by void
+      - record: void:resonances_per_minute:rate1m
+        expr: sum(rate(void_resonances_count[1m])) by (void_id)
+
+      # Total resonances per minute
+      - record: void:resonances_per_minute_total:rate1m
+        expr: sum(rate(void_resonances_count[1m]))
+
+      # Resonances by type
+      - record: void:resonances_by_type:rate5m
+        expr: sum(rate(void_resonances_total[5m])) by (void_id, resonance_type)
+
+      # Resonance to confession ratio
+      - record: void:resonance_confession_ratio:ratio
+        expr: |
+          sum(rate(void_resonances_count[5m])) by (void_id)
+          /
+          sum(rate(void_confessions_count[5m])) by (void_id)
+
+  # WebSocket metrics
+  - name: void_websocket_rules
+    interval: 30s
+    rules:
+      # Total active connections
+      - record: void:websocket_connections:sum
+        expr: sum(void_websocket_connections) by (void_id)
+
+      # Connection rate
+      - record: void:websocket_connection_rate:rate1m
+        expr: sum(rate(void_websocket_connections_total[1m])) by (void_id)
+
+      # Total connections across all voids
+      - record: void:websocket_connections_total:sum
+        expr: sum(void_websocket_connections)
+
+      # Message throughput
+      - record: void:websocket_messages:rate1m
+        expr: sum(rate(void_websocket_messages_total[1m])) by (void_id, direction)
+
+  # Moderation metrics
+  - name: void_moderation_rules
+    interval: 30s
+    rules:
+      # Total queue depth
+      - record: void:moderation_queue_depth:sum
+        expr: sum(void_moderation_queue_depth)
+
+      # Queue depth by priority
+      - record: void:moderation_queue_by_priority:sum
+        expr: sum(void_moderation_queue_depth) by (priority)
+
+      # Queue depth by flag reason
+      - record: void:moderation_queue_by_reason:sum
+        expr: sum(void_moderation_queue_depth) by (flag_reason)
+
+      # Moderation processing rate
+      - record: void:moderation_processed:rate5m
+        expr: sum(rate(void_moderation_processed_total[5m])) by (decision)
+
+      # Auto-moderation accuracy (approx)
+      - record: void:auto_moderation:rate5m
+        expr: sum(rate(void_auto_moderation_total[5m])) by (decision, classifier)
+
+  # Crisis intervention metrics
+  - name: void_crisis_rules
+    interval: 1m
+    rules:
+      # Crisis interventions per hour
+      - record: void:crisis_interventions:rate1h
+        expr: sum(increase(void_crisis_interventions_total[1h])) by (locale, category)
+
+      # Total crisis interventions
+      - record: void:crisis_interventions_total:sum
+        expr: sum(void_crisis_interventions_total) by (locale)
+
+      # Crisis severity distribution
+      - record: void:crisis_by_severity:rate1h
+        expr: sum(increase(void_crisis_interventions_total[1h])) by (severity)
+
+      # Hotline engagement rate
+      - record: void:crisis_hotline_click_rate:ratio
+        expr: |
+          sum(rate(void_crisis_hotline_clicks_total[1h]))
+          /
+          sum(rate(void_crisis_resources_viewed_total[1h]))
+
+  # System health metrics
+  - name: void_system_rules
+    interval: 30s
+    rules:
+      # Request rate by service
+      - record: void:http_requests:rate1m
+        expr: sum(rate(void_http_requests_total[1m])) by (service, method)
+
+      # Error rate
+      - record: void:http_error_rate:ratio
+        expr: |
+          sum(rate(void_http_requests_total{status_code=~"5.."}[5m])) by (service)
+          /
+          sum(rate(void_http_requests_total[5m])) by (service)
+
+      # 4xx error rate
+      - record: void:http_client_error_rate:ratio
+        expr: |
+          sum(rate(void_http_requests_total{status_code=~"4.."}[5m])) by (service)
+          /
+          sum(rate(void_http_requests_total[5m])) by (service)
+
+      # Request latency percentiles
+      - record: void:http_latency_p50:quantile
+        expr: histogram_quantile(0.50, sum(rate(void_http_request_duration_seconds_bucket[5m])) by (le, service))
+
+      - record: void:http_latency_p95:quantile
+        expr: histogram_quantile(0.95, sum(rate(void_http_request_duration_seconds_bucket[5m])) by (le, service))
+
+      - record: void:http_latency_p99:quantile
+        expr: histogram_quantile(0.99, sum(rate(void_http_request_duration_seconds_bucket[5m])) by (le, service))
+
+      # Service health
+      - record: void:service_health:avg
+        expr: avg(void_service_health) by (service)
+
+      # Total errors by type
+      - record: void:errors:rate5m
+        expr: sum(rate(void_errors_total[5m])) by (service, error_type, severity)
+
+  # Void Weather composite metrics
+  - name: void_weather_rules
+    interval: 1m
+    rules:
+      # Activity score (normalized 0-100)
+      - record: void:weather_activity:score
+        expr: |
+          clamp_max(
+            (
+              sum(rate(void_confessions_count[5m])) by (void_id) * 10 +
+              sum(rate(void_resonances_count[5m])) by (void_id) * 5 +
+              sum(void_websocket_connections) by (void_id) * 2
+            ) / 3,
+            100
+          )
+
+      # Engagement temperature
+      - record: void:weather_temperature:score
+        expr: |
+          clamp_max(
+            (
+              sum(rate(void_resonances_count[5m])) by (void_id)
+              /
+              (sum(rate(void_confessions_count[5m])) by (void_id) + 0.001)
+            ) * 20,
+            100
+          )
+
+      # Overall void health score
+      - record: void:weather_health:score
+        expr: |
+          (
+            100 - (void:confession_block_rate:ratio * 100) +
+            100 - (void:confession_flag_rate:ratio * 50) +
+            clamp_max(sum(void_websocket_connections) by (void_id) / 10, 100)
+          ) / 3
