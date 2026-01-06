@@ -1,19 +1,32 @@
-import React, { useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
-  withRepeat,
   withTiming,
-  Easing,
+  FadeInDown,
 } from 'react-native-reanimated';
+import type { VoidType, EchoWord, VoidWeatherState } from '@void-confessions/core';
 import { VOID_CONFIG } from '@void-confessions/core';
 import { useVoidStore } from '../store';
-import { joinVoid, leaveVoid, connectSocket } from '../services';
+import {
+  connectSocket,
+  joinVoid,
+  leaveVoid,
+  resonateConfession,
+  echoConfession,
+  getSocket,
+} from '../services';
+import {
+  VoidBackground,
+  VoidParticleSystem,
+  ConfessionRiver,
+  WeatherIndicator,
+  CollectiveCounter,
+  WhisperInput,
+} from '../components/void';
 import type { VoidScreenProps } from '../navigation';
-
-const { width } = Dimensions.get('window');
 
 export function VoidScreen(): React.JSX.Element {
   const navigation = useNavigation<VoidScreenProps['navigation']>();
@@ -21,100 +34,247 @@ export function VoidScreen(): React.JSX.Element {
   const { voidType } = route.params;
 
   const config = VOID_CONFIG[voidType];
+
+  // Store state
   const confessions = useVoidStore((state) => state.confessions);
   const weather = useVoidStore((state) => state.weather[voidType]);
+  const connectionStatus = useVoidStore((state) => state.connectionStatus);
+  const setWeather = useVoidStore((state) => state.setWeather);
+  const addConfession = useVoidStore((state) => state.addConfession);
+  const updateConfession = useVoidStore((state) => state.updateConfession);
+  const removeConfession = useVoidStore((state) => state.removeConfession);
+  const isPremium = useVoidStore((state) => state.isPremium);
 
-  // Ambient animation
-  const ambientOpacity = useSharedValue(0.3);
+  // Local state for UI effects
+  const [glowingConfessionId, setGlowingConfessionId] = useState<string | null>(null);
+  const [echoEvent, setEchoEvent] = useState<{ confessionId: string; word: EchoWord } | null>(null);
+  const [totalResonances, setTotalResonances] = useState(0);
+  const [totalEchoes, setTotalEchoes] = useState(0);
+  const [activeViewers, setActiveViewers] = useState(1);
 
+  // Refs for tracking
+  const weatherTransitionRef = useRef<VoidWeatherState | null>(null);
+  const confessionsRef = useRef(confessions);
+  confessionsRef.current = confessions;
+
+  // Animation values
+  const headerOpacity = useSharedValue(0);
+
+  // Connect to WebSocket and subscribe to void channel
   useEffect(() => {
-    // Connect and join void
-    connectSocket();
+    // Fade in header
+    headerOpacity.value = withTiming(1, { duration: 500 });
+
+    // Connect socket
+    const socket = connectSocket();
+
+    // Join void channel
     joinVoid(voidType);
 
-    ambientOpacity.value = withRepeat(
-      withTiming(0.6, { duration: 4000, easing: Easing.inOut(Easing.ease) }),
-      -1,
-      true
-    );
+    // Socket event handlers
+    const handleConfessionNew = (data: { confession: any }) => {
+      addConfession(data.confession);
+    };
 
+    const handleConfessionResonance = (data: { confessionId: string; newCount: number }) => {
+      // Update confession using ref to get latest state
+      const confession = confessionsRef.current.find((c) => c.id === data.confessionId);
+      if (confession) {
+        updateConfession({ ...confession, resonanceCount: data.newCount });
+      }
+
+      // Trigger glow effect
+      setGlowingConfessionId(data.confessionId);
+      setTimeout(() => setGlowingConfessionId(null), 1000);
+
+      // Update total
+      setTotalResonances((prev) => prev + 1);
+    };
+
+    const handleConfessionEcho = (data: { confessionId: string; word: EchoWord; newCount: number }) => {
+      // Update confession using ref
+      const confession = confessionsRef.current.find((c) => c.id === data.confessionId);
+      if (confession) {
+        const echoes = [...confession.echoes];
+        const echoIndex = echoes.findIndex((e) => e.word === data.word);
+        if (echoIndex >= 0) {
+          echoes[echoIndex] = { word: data.word, count: data.newCount };
+        } else {
+          echoes.push({ word: data.word, count: data.newCount });
+        }
+        updateConfession({ ...confession, echoes });
+      }
+
+      // Show echo word animation
+      setEchoEvent({ confessionId: data.confessionId, word: data.word });
+      setTimeout(() => setEchoEvent(null), 2000);
+
+      // Update total
+      setTotalEchoes((prev) => prev + 1);
+    };
+
+    const handleConfessionExpired = (data: { confessionId: string }) => {
+      removeConfession(data.confessionId);
+    };
+
+    const handleWeatherUpdate = (data: { voidType: VoidType; weather: VoidWeatherState }) => {
+      if (data.voidType === voidType) {
+        weatherTransitionRef.current = data.weather;
+        setWeather(voidType, data.weather);
+      }
+    };
+
+    const handleViewerCount = (data: { count: number }) => {
+      setActiveViewers(data.count);
+    };
+
+    // Register event listeners
+    socket.on('confession:new', handleConfessionNew);
+    socket.on('confession:resonance', handleConfessionResonance);
+    socket.on('confession:echo', handleConfessionEcho);
+    socket.on('confession:expired', handleConfessionExpired);
+    socket.on('weather:update', handleWeatherUpdate);
+    socket.on('viewers:count', handleViewerCount);
+
+    // Cleanup
     return () => {
+      socket.off('confession:new', handleConfessionNew);
+      socket.off('confession:resonance', handleConfessionResonance);
+      socket.off('confession:echo', handleConfessionEcho);
+      socket.off('confession:expired', handleConfessionExpired);
+      socket.off('weather:update', handleWeatherUpdate);
+      socket.off('viewers:count', handleViewerCount);
+
       leaveVoid(voidType);
     };
   }, [voidType]);
 
-  const ambientStyle = useAnimatedStyle(() => ({
-    opacity: ambientOpacity.value,
+  // Calculate totals from confessions
+  useEffect(() => {
+    const resonances = confessions.reduce((sum, c) => sum + c.resonanceCount, 0);
+    const echoes = confessions.reduce(
+      (sum, c) => sum + c.echoes.reduce((eSum, e) => eSum + e.count, 0),
+      0
+    );
+    setTotalResonances(resonances);
+    setTotalEchoes(echoes);
+  }, [confessions]);
+
+  // Handlers
+  const handleResonate = useCallback((confessionId: string) => {
+    resonateConfession(confessionId);
+  }, []);
+
+  const handleEcho = useCallback((confessionId: string, word: EchoWord) => {
+    echoConfession(confessionId, word);
+  }, []);
+
+  const handleCompose = useCallback(() => {
+    navigation.navigate('Compose', { voidType });
+  }, [navigation, voidType]);
+
+  const handleQuickWhisper = useCallback(async (content: string) => {
+    // Create confession via API
+    try {
+      const response = await fetch('http://localhost:3002/confessions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content,
+          voidType,
+          releaseStyle: 'default',
+        }),
+      });
+
+      const data = await response.json();
+      if (!data.success) {
+        throw new Error(data.error?.message || 'Failed to create confession');
+      }
+    } catch (error) {
+      console.error('Quick whisper failed:', error);
+      throw error;
+    }
+  }, [voidType]);
+
+  const handleBack = useCallback(() => {
+    navigation.goBack();
+  }, [navigation]);
+
+  // Animated styles
+  const headerStyle = useAnimatedStyle(() => ({
+    opacity: headerOpacity.value,
   }));
 
   return (
     <View style={styles.container}>
-      {/* Ambient background */}
-      <Animated.View
-        style={[
-          styles.ambientGlow,
-          ambientStyle,
-          { backgroundColor: config.colors.primary },
-        ]}
+      {/* Layer 1: Animated background */}
+      <VoidBackground voidType={voidType} weather={weather} />
+
+      {/* Layer 2: Particle system */}
+      <VoidParticleSystem
+        voidType={voidType}
+        weather={weather}
+        intensity={weather?.intensity || 0.5}
       />
 
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
+      {/* Layer 3: Confession river */}
+      <View style={styles.riverContainer}>
+        <ConfessionRiver
+          confessions={confessions}
+          voidType={voidType}
+          onResonate={handleResonate}
+          onEcho={handleEcho}
+          glowingConfessionId={glowingConfessionId}
+          echoEvent={echoEvent}
+        />
+      </View>
+
+      {/* Layer 4: Top overlay */}
+      <SafeAreaView style={styles.topOverlay} pointerEvents="box-none">
+        <Animated.View style={[styles.header, headerStyle]}>
+          {/* Back button */}
+          <TouchableOpacity style={styles.backButton} onPress={handleBack}>
+            <Text style={styles.backButtonText}>←</Text>
+          </TouchableOpacity>
+
+          {/* Center: Void title */}
+          <View style={styles.titleContainer}>
+            <Text style={styles.voidTitle}>
+              {voidType.charAt(0).toUpperCase() + voidType.slice(1)}
+            </Text>
+            {connectionStatus !== 'connected' && (
+              <Text style={styles.connectionStatus}>
+                {connectionStatus === 'connecting' ? 'Connecting...' : 'Offline'}
+              </Text>
+            )}
+          </View>
+
+          {/* Right spacer for alignment */}
+          <View style={styles.headerSpacer} />
+        </Animated.View>
+
+        {/* Weather and Counter row */}
+        <Animated.View
+          entering={FadeInDown.delay(200).duration(400)}
+          style={styles.statsRow}
         >
-          <Text style={styles.backButtonText}>←</Text>
-        </TouchableOpacity>
+          <WeatherIndicator voidType={voidType} weather={weather} />
+          <CollectiveCounter
+            voidType={voidType}
+            totalResonances={totalResonances}
+            totalEchoes={totalEchoes}
+            activeViewers={activeViewers}
+          />
+        </Animated.View>
+      </SafeAreaView>
 
-        <View style={styles.headerInfo}>
-          <Text style={styles.voidTitle}>
-            {voidType.charAt(0).toUpperCase() + voidType.slice(1)} Void
-          </Text>
-          {weather && (
-            <Text style={styles.weatherText}>
-              Weather: {weather.state}
-            </Text>
-          )}
-        </View>
-
-        <View style={styles.headerSpacer} />
-      </View>
-
-      {/* Confessions area (placeholder - implement with FlatList/ScrollView) */}
-      <View style={styles.confessionsArea}>
-        {confessions.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyStateText}>
-              The void is quiet...{'\n'}
-              Be the first to confess
-            </Text>
-          </View>
-        ) : (
-          <View style={styles.confessionsList}>
-            {confessions.slice(0, 5).map((confession) => (
-              <View key={confession.id} style={styles.confessionBubble}>
-                <Text style={styles.confessionText} numberOfLines={3}>
-                  {confession.content}
-                </Text>
-                <View style={styles.confessionMeta}>
-                  <Text style={styles.resonanceCount}>
-                    {confession.resonanceCount} resonances
-                  </Text>
-                </View>
-              </View>
-            ))}
-          </View>
-        )}
-      </View>
-
-      {/* Compose button */}
-      <TouchableOpacity
-        style={[styles.composeButton, { backgroundColor: config.colors.primary }]}
-        onPress={() => navigation.navigate('Compose', { voidType })}
-      >
-        <Text style={styles.composeButtonText}>+</Text>
-      </TouchableOpacity>
+      {/* Layer 5: Bottom overlay - WhisperInput */}
+      <WhisperInput
+        voidType={voidType}
+        onCompose={handleCompose}
+        onQuickWhisper={handleQuickWhisper}
+        isPremium={isPremium}
+      />
     </View>
   );
 }
@@ -122,103 +282,59 @@ export function VoidScreen(): React.JSX.Element {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0a0a0a',
+    backgroundColor: '#050508',
   },
-  ambientGlow: {
+  riverContainer: {
+    flex: 1,
+    paddingTop: 140, // Space for header and stats
+  },
+  topOverlay: {
     position: 'absolute',
-    top: -100,
-    left: -100,
-    right: -100,
-    height: 400,
-    borderRadius: 200,
-    filter: 'blur(100px)',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: 60,
-    paddingHorizontal: 20,
-    paddingBottom: 20,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 12,
   },
   backButton: {
-    padding: 10,
+    width: 44,
+    height: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   backButtonText: {
     fontSize: 28,
     color: '#ffffff',
   },
-  headerInfo: {
+  titleContainer: {
     alignItems: 'center',
   },
   voidTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '600',
     color: '#ffffff',
+    letterSpacing: 0.5,
   },
-  weatherText: {
-    fontSize: 12,
-    color: '#8b8b9a',
-    marginTop: 4,
+  connectionStatus: {
+    fontSize: 11,
+    color: '#f59e0b',
+    marginTop: 2,
   },
   headerSpacer: {
-    width: 48,
+    width: 44,
   },
-  confessionsArea: {
-    flex: 1,
-    paddingHorizontal: 20,
-  },
-  emptyState: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  emptyStateText: {
-    fontSize: 16,
-    color: '#6b6b7a',
-    textAlign: 'center',
-    lineHeight: 24,
-  },
-  confessionsList: {
-    paddingTop: 20,
-  },
-  confessionBubble: {
-    backgroundColor: '#1a1a2e',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-  },
-  confessionText: {
-    fontSize: 15,
-    color: '#ffffff',
-    lineHeight: 22,
-  },
-  confessionMeta: {
+  statsRow: {
     flexDirection: 'row',
-    marginTop: 12,
-  },
-  resonanceCount: {
-    fontSize: 12,
-    color: '#8b8b9a',
-  },
-  composeButton: {
-    position: 'absolute',
-    bottom: 40,
-    right: 20,
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    justifyContent: 'center',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  composeButtonText: {
-    fontSize: 32,
-    color: '#ffffff',
-    fontWeight: '300',
+    paddingHorizontal: 16,
+    paddingBottom: 8,
   },
 });
