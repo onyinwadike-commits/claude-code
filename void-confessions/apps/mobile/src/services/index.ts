@@ -30,3 +30,15 @@ export {
   cleanupAudio,
   type RecordingState,
 } from './audio';
+
+export {
+  anonymizeVoice,
+  uploadAnonymizedAudio,
+  deleteAnonymizedFile,
+  cleanupTempAudioFiles,
+  generateRandomParams,
+  isNativeAnonymizerAvailable,
+  getAudioFileInfo,
+  type AnonymizationParams,
+  type AnonymizationResult,
+} from './voiceAnonymizer';
