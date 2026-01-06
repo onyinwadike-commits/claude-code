@@ -7,7 +7,7 @@ import Animated, {
   withTiming,
   FadeInDown,
 } from 'react-native-reanimated';
-import type { VoidType, EchoWord, VoidWeatherState } from '@void-confessions/core';
+import type { VoidType, EchoWord, VoidWeatherState, ReleaseStyle } from '@void-confessions/core';
 import { VOID_CONFIG } from '@void-confessions/core';
 import { useVoidStore } from '../store';
 import {
@@ -179,7 +179,7 @@ export function VoidScreen(): React.JSX.Element {
     navigation.navigate('Compose', { voidType });
   }, [navigation, voidType]);
 
-  const handleQuickWhisper = useCallback(async (content: string) => {
+  const handleQuickWhisper = useCallback(async (content: string, releaseStyle: ReleaseStyle) => {
     // Create confession via API
     try {
       const response = await fetch('http://localhost:3002/confessions', {
@@ -188,7 +188,7 @@ export function VoidScreen(): React.JSX.Element {
         body: JSON.stringify({
           content,
           voidType,
-          releaseStyle: 'default',
+          releaseStyle,
         }),
       });
 
