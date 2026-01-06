@@ -1,87 +1,228 @@
 version: '3.8'
 
 services:
+  # =============================================================================
+  # Infrastructure Services
+  # =============================================================================
+
+  redis:
+    image: redis:7-alpine
+    container_name: void-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - void-network
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: void-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: void_user
+      POSTGRES_PASSWORD: void_secret_password
+      POSTGRES_DB: void_metrics
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U void_user -d void_metrics"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - void-network
+    restart: unless-stopped
+
+  # =============================================================================
+  # Backend Services
+  # =============================================================================
+
   api-gateway:
     build:
       context: ../../
       dockerfile: infrastructure/docker/Dockerfile.api-gateway
+    container_name: void-api-gateway
     ports:
-      - "3000:3000"
+      - "3001:3000"
     environment:
       - NODE_ENV=development
       - PORT=3000
+      - HOST=0.0.0.0
+      - REDIS_URL=redis://redis:6379/0
       - CONFESSION_SERVICE_URL=http://confession-service:3001
       - REDACTION_SERVICE_URL=http://redaction-service:8001
       - SENTIMENT_SERVICE_URL=http://sentiment-service:8002
+      - CORS_ORIGIN=http://localhost:3005,http://localhost:3006
     depends_on:
-      - confession-service
-      - redaction-service
-      - sentiment-service
+      redis:
+        condition: service_healthy
+      confession-service:
+        condition: service_healthy
+      redaction-service:
+        condition: service_healthy
+      sentiment-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     networks:
       - void-network
+    restart: unless-stopped
 
   confession-service:
     build:
       context: ../../
       dockerfile: infrastructure/docker/Dockerfile.confession-service
+    container_name: void-confession-service
     ports:
-      - "3001:3001"
+      - "3002:3001"
     environment:
       - NODE_ENV=development
       - PORT=3001
+      - HOST=0.0.0.0
+      - REDIS_URL=redis://redis:6379/0
+      - REDACTION_SERVICE_URL=http://redaction-service:8001
+      - CORS_ORIGIN=*
+    depends_on:
+      redis:
+        condition: service_healthy
+      redaction-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     networks:
       - void-network
+    restart: unless-stopped
 
   redaction-service:
     build:
       context: ../../services/redaction-service
       dockerfile: Dockerfile
+    container_name: void-redaction-service
     ports:
-      - "8001:8001"
+      - "3003:8001"
     environment:
       - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=INFO
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
     networks:
       - void-network
+    restart: unless-stopped
 
   sentiment-service:
     build:
       context: ../../services/sentiment-service
       dockerfile: Dockerfile
+    container_name: void-sentiment-service
     ports:
-      - "8002:8002"
+      - "3004:8002"
     environment:
       - PYTHONUNBUFFERED=1
-    networks:
-      - void-network
-
-  web:
-    build:
-      context: ../../
-      dockerfile: infrastructure/docker/Dockerfile.web
-    ports:
-      - "3002:3000"
-    environment:
-      - NODE_ENV=development
-      - NEXT_PUBLIC_API_URL=http://localhost:3000
+      - REDIS_URL=redis://redis:6379/0
+      - LOG_LEVEL=INFO
     depends_on:
-      - api-gateway
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8002/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
     networks:
       - void-network
+    restart: unless-stopped
 
-  admin:
-    build:
-      context: ../../
-      dockerfile: infrastructure/docker/Dockerfile.admin
-    ports:
-      - "3003:3001"
-    environment:
-      - NODE_ENV=development
-      - NEXT_PUBLIC_API_URL=http://localhost:3000
-    depends_on:
-      - api-gateway
-    networks:
-      - void-network
+  # =============================================================================
+  # Frontend Applications (Optional - uncomment to include)
+  # =============================================================================
+
+  # web:
+  #   build:
+  #     context: ../../
+  #     dockerfile: infrastructure/docker/Dockerfile.web
+  #   container_name: void-web
+  #   ports:
+  #     - "3005:3000"
+  #   environment:
+  #     - NODE_ENV=development
+  #     - NEXT_PUBLIC_API_URL=http://localhost:3001
+  #     - NEXT_PUBLIC_WS_URL=ws://localhost:3001
+  #   depends_on:
+  #     api-gateway:
+  #       condition: service_healthy
+  #   healthcheck:
+  #     test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
+  #     start_period: 60s
+  #   networks:
+  #     - void-network
+  #   restart: unless-stopped
+
+  # admin:
+  #   build:
+  #     context: ../../
+  #     dockerfile: infrastructure/docker/Dockerfile.admin
+  #   container_name: void-admin
+  #   ports:
+  #     - "3006:3001"
+  #   environment:
+  #     - NODE_ENV=development
+  #     - NEXT_PUBLIC_API_URL=http://localhost:3001
+  #   depends_on:
+  #     api-gateway:
+  #       condition: service_healthy
+  #   healthcheck:
+  #     test: ["CMD", "wget", "-q", "--spider", "http://localhost:3001"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
+  #     start_period: 60s
+  #   networks:
+  #     - void-network
+  #   restart: unless-stopped
+
+# =============================================================================
+# Networks
+# =============================================================================
 
 networks:
   void-network:
     driver: bridge
+    name: void-confessions-network
+
+# =============================================================================
+# Volumes
+# =============================================================================
+
+volumes:
+  redis-data:
+    name: void-redis-data
+  postgres-data:
+    name: void-postgres-data
