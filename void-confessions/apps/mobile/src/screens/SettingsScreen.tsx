@@ -6,20 +6,36 @@ import {
   StyleSheet,
   ScrollView,
   Linking,
+  Switch,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { useVoidStore } from '../store';
+import { useVoidStore, useSettingsStore } from '../store';
 import { restorePurchases } from '../services';
+import { useConfidantAI, useIsVoidWalkerPlus } from '../hooks';
 import type { SettingsScreenProps } from '../navigation';
 
 export function SettingsScreen(): React.JSX.Element {
   const navigation = useNavigation<SettingsScreenProps['navigation']>();
   const isPremium = useVoidStore((state) => state.isPremium);
 
+  // Settings
+  const confidantEnabled = useSettingsStore((state) => state.confidantEnabled);
+  const setConfidantEnabled = useSettingsStore((state) => state.setConfidantEnabled);
+  const soundEnabled = useSettingsStore((state) => state.soundEnabled);
+  const setSoundEnabled = useSettingsStore((state) => state.setSoundEnabled);
+  const hapticsEnabled = useSettingsStore((state) => state.hapticsEnabled);
+  const setHapticsEnabled = useSettingsStore((state) => state.setHapticsEnabled);
+  const screenshotBlockingEnabled = useSettingsStore((state) => state.screenshotBlockingEnabled);
+  const setScreenshotBlockingEnabled = useSettingsStore((state) => state.setScreenshotBlockingEnabled);
+
+  // Feature access
+  const { hasAccess: hasConfidantAccess } = useConfidantAI();
+  const isVoidWalkerPlus = useIsVoidWalkerPlus();
+
   const handleRestorePurchases = async () => {
     try {
-      const restored = await restorePurchases();
-      if (restored) {
+      const result = await restorePurchases();
+      if (result.success) {
         // Show success (implement alert or toast)
         console.log('Purchases restored successfully');
       }
@@ -72,6 +88,105 @@ export function SettingsScreen(): React.JSX.Element {
             <Text style={styles.settingLabel}>Restore Purchases</Text>
             <Text style={styles.settingChevron}>›</Text>
           </TouchableOpacity>
+        </View>
+
+        {/* Experience Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>EXPERIENCE</Text>
+
+          {/* Confidant Toggle */}
+          <View style={styles.settingItem}>
+            <View style={styles.settingInfo}>
+              <View style={styles.settingLabelRow}>
+                <Text style={styles.settingIcon}>🕯️</Text>
+                <Text style={[
+                  styles.settingLabel,
+                  !hasConfidantAccess && styles.settingLabelDisabled
+                ]}>
+                  Confidant
+                </Text>
+                {!hasConfidantAccess && (
+                  <View style={styles.premiumBadge}>
+                    <Text style={styles.premiumBadgeText}>PREMIUM</Text>
+                  </View>
+                )}
+              </View>
+              <Text style={styles.settingDescription}>
+                {hasConfidantAccess
+                  ? 'Receive compassionate reflection after release'
+                  : 'Unlock with Void Walker subscription'}
+              </Text>
+            </View>
+            <Switch
+              value={confidantEnabled && hasConfidantAccess}
+              onValueChange={setConfidantEnabled}
+              disabled={!hasConfidantAccess}
+              trackColor={{ false: '#3a3a4e', true: '#7c3aed' }}
+              thumbColor={confidantEnabled && hasConfidantAccess ? '#ffffff' : '#8b8b9a'}
+            />
+          </View>
+
+          {/* Sound Toggle */}
+          <View style={styles.settingItem}>
+            <View style={styles.settingInfo}>
+              <View style={styles.settingLabelRow}>
+                <Text style={styles.settingIcon}>🔊</Text>
+                <Text style={styles.settingLabel}>Sound Effects</Text>
+              </View>
+              <Text style={styles.settingDescription}>
+                Ambient audio and interaction sounds
+              </Text>
+            </View>
+            <Switch
+              value={soundEnabled}
+              onValueChange={setSoundEnabled}
+              trackColor={{ false: '#3a3a4e', true: '#7c3aed' }}
+              thumbColor={soundEnabled ? '#ffffff' : '#8b8b9a'}
+            />
+          </View>
+
+          {/* Haptics Toggle */}
+          <View style={styles.settingItem}>
+            <View style={styles.settingInfo}>
+              <View style={styles.settingLabelRow}>
+                <Text style={styles.settingIcon}>📳</Text>
+                <Text style={styles.settingLabel}>Haptic Feedback</Text>
+              </View>
+              <Text style={styles.settingDescription}>
+                Vibration responses to interactions
+              </Text>
+            </View>
+            <Switch
+              value={hapticsEnabled}
+              onValueChange={setHapticsEnabled}
+              trackColor={{ false: '#3a3a4e', true: '#7c3aed' }}
+              thumbColor={hapticsEnabled ? '#ffffff' : '#8b8b9a'}
+            />
+          </View>
+        </View>
+
+        {/* Privacy Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>PRIVACY</Text>
+
+          {/* Screenshot Blocking */}
+          <View style={styles.settingItem}>
+            <View style={styles.settingInfo}>
+              <View style={styles.settingLabelRow}>
+                <Text style={styles.settingIcon}>🛡️</Text>
+                <Text style={styles.settingLabel}>Screenshot Blocking</Text>
+              </View>
+              <Text style={styles.settingDescription}>
+                Prevent screenshots of confessions
+              </Text>
+            </View>
+            <Switch
+              value={screenshotBlockingEnabled}
+              onValueChange={setScreenshotBlockingEnabled}
+              trackColor={{ false: '#3a3a4e', true: '#7c3aed' }}
+              thumbColor={screenshotBlockingEnabled ? '#ffffff' : '#8b8b9a'}
+            />
+          </View>
         </View>
 
         {/* About Section */}
@@ -191,9 +306,30 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginBottom: 8,
   },
+  settingInfo: {
+    flex: 1,
+    marginRight: 12,
+  },
+  settingLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  settingIcon: {
+    fontSize: 18,
+    marginRight: 8,
+  },
   settingLabel: {
     fontSize: 16,
     color: '#ffffff',
+  },
+  settingLabelDisabled: {
+    color: '#6b6b7a',
+  },
+  settingDescription: {
+    fontSize: 13,
+    color: '#8b8b9a',
+    marginLeft: 26,
   },
   settingValue: {
     fontSize: 16,
@@ -202,6 +338,18 @@ const styles = StyleSheet.create({
   settingChevron: {
     fontSize: 20,
     color: '#6b6b7a',
+  },
+  premiumBadge: {
+    backgroundColor: '#7c3aed30',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginLeft: 8,
+  },
+  premiumBadgeText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#7c3aed',
   },
   infoSection: {
     paddingHorizontal: 20,

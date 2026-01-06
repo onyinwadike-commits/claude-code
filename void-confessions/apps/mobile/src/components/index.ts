@@ -1,6 +1,7 @@
 export { ParticleBackground } from './ParticleBackground';
 export { ScreenshotBlocker, useScreenshotBlocker } from './ScreenshotBlocker';
 export { VoiceRecorder } from './VoiceRecorder';
+export { Confidant, ConfidantToggle } from './Confidant';
 
 // Void screen components
 export {

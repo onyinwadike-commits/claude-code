@@ -23,3 +23,10 @@ export {
   type SubscriptionInfo,
   type PurchasedRelease,
 } from './subscriptionStore';
+
+export {
+  useSettingsStore,
+  selectConfidantEnabled,
+  selectSoundEnabled,
+  selectHapticsEnabled,
+} from './settingsStore';

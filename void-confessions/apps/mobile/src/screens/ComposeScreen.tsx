@@ -55,6 +55,7 @@ export function ComposeScreen(): React.JSX.Element {
         navigation.replace('Release', {
           confessionId: data.data.id,
           voidType,
+          confessionContent: content, // Pass content for Confidant (analyzed locally only)
         });
       } else {
         setError(data.error?.message ?? 'Failed to create confession');

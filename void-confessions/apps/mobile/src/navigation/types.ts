@@ -10,7 +10,7 @@ export type RootStackParamList = {
   VoidSelect: undefined;
   Void: { voidType: VoidType };
   Compose: { voidType: VoidType };
-  Release: { confessionId: string; voidType: VoidType };
+  Release: { confessionId: string; voidType: VoidType; confessionContent?: string };
 
   // Settings & Premium
   Settings: undefined;

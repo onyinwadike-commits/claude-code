@@ -73,3 +73,10 @@ export {
   type AnonymizationParams,
   type AnonymizationResult,
 } from './voiceAnonymizer';
+
+export {
+  generateReflection,
+  analyzeConfessionTone,
+  getConfidantReflection,
+  type ConfidantResponse,
+} from './confidant';
