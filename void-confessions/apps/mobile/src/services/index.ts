@@ -9,14 +9,45 @@ export {
 } from './socket';
 
 export {
+  // Initialization
   initializePurchases,
-  checkPremiumStatus,
+
+  // Offerings
+  fetchOfferings,
   getOfferings,
+  getSubscriptionPackagesByTier,
+  getReleaseAnimationPackages,
+
+  // Purchases
+  purchaseSubscription,
+  purchaseReleaseAnimation,
+  purchaseProduct,
   purchasePackage,
+
+  // Restore
   restorePurchases,
-  getSubscriptionInfo,
-  PRODUCTS,
+
+  // Management
+  getManagementURL,
+  checkIntroEligibility,
+
+  // User
+  loginUser,
+  logoutUser,
+  getAppUserId,
+
+  // Helpers
+  hasEntitlement,
+  getCurrentTier,
+  hasTier,
+  refreshCustomerInfo,
+  checkPremiumStatus,
+
+  // Constants
   ENTITLEMENTS,
+
+  // Types
+  type PurchaseResult,
 } from './purchases';
 
 export {
