@@ -1,0 +1,101 @@
+# Void Confessions - PodDisruptionBudgets
+# Ensures minimum availability during voluntary disruptions
+# (node maintenance, upgrades, scaling)
+---
+# API Gateway PDB - Critical service, must maintain availability
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: api-gateway-pdb
+  namespace: void-confessions
+  labels:
+    app.kubernetes.io/name: api-gateway
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: api-gateway
+---
+# Confession Service PDB - Core service
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: confession-service-pdb
+  namespace: void-confessions
+  labels:
+    app.kubernetes.io/name: confession-service
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: confession-service
+---
+# Sentiment Service PDB
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: sentiment-service-pdb
+  namespace: void-confessions
+  labels:
+    app.kubernetes.io/name: sentiment-service
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: sentiment-service
+---
+# Redaction Service PDB
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: redaction-service-pdb
+  namespace: void-confessions
+  labels:
+    app.kubernetes.io/name: redaction-service
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: redaction-service
+---
+# Web Frontend PDB
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: web-pdb
+  namespace: void-confessions
+  labels:
+    app.kubernetes.io/name: web
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: web
+---
+# Admin Dashboard PDB
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: admin-pdb
+  namespace: void-confessions
+  labels:
+    app.kubernetes.io/name: admin
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: admin
+---
+# Redis PDB - Single replica, use maxUnavailable
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: redis-pdb
+  namespace: void-confessions
+  labels:
+    app.kubernetes.io/name: redis
+spec:
+  maxUnavailable: 0
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: redis

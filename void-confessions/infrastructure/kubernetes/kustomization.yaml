@@ -1,0 +1,63 @@
+# Kustomization file for Void Confessions Kubernetes deployment
+# Use: kubectl apply -k infrastructure/kubernetes/
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: void-confessions
+
+# Common labels for all resources
+commonLabels:
+  app.kubernetes.io/part-of: void-confessions
+  app.kubernetes.io/managed-by: kustomize
+
+# Resources to deploy
+resources:
+  # Base configuration
+  - base/namespace.yaml
+  - base/rbac.yaml
+
+  # Configuration
+  - configmaps/configmaps.yaml
+  - secrets/secrets.yaml
+
+  # Deployments
+  - deployments/api-gateway.yaml
+  - deployments/confession-service.yaml
+  - deployments/sentiment-service.yaml
+  - deployments/redaction-service.yaml
+  - deployments/web.yaml
+  - deployments/admin.yaml
+  - deployments/redis.yaml
+
+  # Services
+  - services/services.yaml
+
+  # Autoscaling
+  - hpa/hpa.yaml
+
+  # Availability
+  - pdb/pdb.yaml
+
+  # Ingress
+  - ingress/ingress.yaml
+
+# Image customization (update tags per environment)
+images:
+  - name: void-confessions/api-gateway
+    newTag: latest
+  - name: void-confessions/confession-service
+    newTag: latest
+  - name: void-confessions/sentiment-service
+    newTag: latest
+  - name: void-confessions/redaction-service
+    newTag: latest
+  - name: void-confessions/web
+    newTag: latest
+  - name: void-confessions/admin
+    newTag: latest
+
+# ConfigMap generator (alternative to static configmaps)
+# configMapGenerator:
+#   - name: app-config
+#     envs:
+#       - .env.production

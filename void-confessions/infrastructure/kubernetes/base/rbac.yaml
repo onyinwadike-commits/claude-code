@@ -1,0 +1,67 @@
+# Void Confessions - RBAC Configuration
+# Service accounts and role bindings for workloads
+---
+# Service Account for application pods
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: void-confessions-sa
+  namespace: void-confessions
+  labels:
+    app.kubernetes.io/name: void-confessions
+automountServiceAccountToken: false
+---
+# Role for reading ConfigMaps and Secrets
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: void-confessions-reader
+  namespace: void-confessions
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get"]
+    resourceNames:
+      - database-credentials
+      - redis-credentials
+      - api-keys
+      - external-api-keys
+      - admin-auth
+---
+# Bind the role to the service account
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: void-confessions-reader-binding
+  namespace: void-confessions
+subjects:
+  - kind: ServiceAccount
+    name: void-confessions-sa
+    namespace: void-confessions
+roleRef:
+  kind: Role
+  name: void-confessions-reader
+  apiGroup: rbac.authorization.k8s.io
+---
+# Network Policy Role (for operators)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: void-confessions-operator
+  namespace: void-confessions
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "pods/log", "services", "endpoints"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["autoscaling"]
+    resources: ["horizontalpodautoscalers"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["policy"]
+    resources: ["poddisruptionbudgets"]
+    verbs: ["get", "list", "watch"]

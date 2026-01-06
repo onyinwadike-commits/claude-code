@@ -1,0 +1,92 @@
+# Void Confessions - Kubernetes Namespace
+# Creates isolated namespace for all void-confessions resources
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: void-confessions
+  labels:
+    app.kubernetes.io/name: void-confessions
+    app.kubernetes.io/managed-by: kubectl
+    environment: production
+---
+# Resource Quotas for the namespace
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: void-confessions-quota
+  namespace: void-confessions
+spec:
+  hard:
+    requests.cpu: "8"
+    requests.memory: 16Gi
+    limits.cpu: "16"
+    limits.memory: 32Gi
+    pods: "50"
+    services: "20"
+    secrets: "30"
+    configmaps: "30"
+    persistentvolumeclaims: "10"
+---
+# Limit Range for default resource limits
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: void-confessions-limits
+  namespace: void-confessions
+spec:
+  limits:
+    - default:
+        cpu: "500m"
+        memory: "512Mi"
+      defaultRequest:
+        cpu: "100m"
+        memory: "128Mi"
+      type: Container
+---
+# Network Policy - Default deny all ingress
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: void-confessions
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+---
+# Network Policy - Allow internal communication
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-internal
+  namespace: void-confessions
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              app.kubernetes.io/name: void-confessions
+---
+# Network Policy - Allow ingress controller
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ingress-controller
+  namespace: void-confessions
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: gateway
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 3000
