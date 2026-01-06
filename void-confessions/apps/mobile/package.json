@@ -37,9 +37,12 @@
     "expo": "~50.0.0",
     "expo-av": "~13.10.0",
     "expo-blur": "~12.9.0",
+    "expo-crypto": "~12.8.0",
     "expo-file-system": "~16.0.0",
     "expo-haptics": "~12.8.0",
     "expo-modules-core": "~1.11.0",
+    "expo-notifications": "~0.27.0",
+    "expo-secure-store": "~12.8.0",
 
     "@react-native-async-storage/async-storage": "^1.21.0",
     "react-native-purchases": "^7.11.0"

@@ -11,6 +11,9 @@ import {
   ReleaseScreen,
   SettingsScreen,
   PremiumScreen,
+  LetterToVoidScreen,
+  LetterRevealScreen,
+  LettersListScreen,
 } from '../screens';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -68,6 +71,26 @@ export function RootNavigator(): React.JSX.Element {
         name="Premium"
         component={PremiumScreen}
         options={{ animation: 'slide_from_bottom' }}
+      />
+
+      {/* Letters to the Void */}
+      <Stack.Screen
+        name="LetterToVoid"
+        component={LetterToVoidScreen}
+        options={{ animation: 'slide_from_bottom' }}
+      />
+      <Stack.Screen
+        name="LetterReveal"
+        component={LetterRevealScreen}
+        options={{
+          animation: 'fade',
+          gestureEnabled: false, // Prevent dismissal during reveal
+        }}
+      />
+      <Stack.Screen
+        name="LettersList"
+        component={LettersListScreen}
+        options={{ animation: 'slide_from_right' }}
       />
     </Stack.Navigator>
   );

@@ -8,4 +8,7 @@ export type {
   ReleaseScreenProps,
   SettingsScreenProps,
   PremiumScreenProps,
+  LetterToVoidScreenProps,
+  LetterRevealScreenProps,
+  LettersListScreenProps,
 } from './types';

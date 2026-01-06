@@ -17,6 +17,11 @@ export type RootStackParamList = {
   Premium: undefined;
   SubscriptionSuccess: undefined;
 
+  // Letters to the Void
+  LetterToVoid: { voidType: VoidType };
+  LetterReveal: { letterId: string };
+  LettersList: undefined;
+
   // Onboarding
   Onboarding: undefined;
   OnboardingComplete: undefined;
@@ -32,6 +37,9 @@ export type ComposeScreenProps = NativeStackScreenProps<RootStackParamList, 'Com
 export type ReleaseScreenProps = NativeStackScreenProps<RootStackParamList, 'Release'>;
 export type SettingsScreenProps = NativeStackScreenProps<RootStackParamList, 'Settings'>;
 export type PremiumScreenProps = NativeStackScreenProps<RootStackParamList, 'Premium'>;
+export type LetterToVoidScreenProps = NativeStackScreenProps<RootStackParamList, 'LetterToVoid'>;
+export type LetterRevealScreenProps = NativeStackScreenProps<RootStackParamList, 'LetterReveal'>;
+export type LettersListScreenProps = NativeStackScreenProps<RootStackParamList, 'LettersList'>;
 
 /**
  * Type for useNavigation hook

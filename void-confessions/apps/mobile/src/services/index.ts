@@ -80,3 +80,31 @@ export {
   getConfidantReflection,
   type ConfidantResponse,
 } from './confidant';
+
+export {
+  encryptLetter,
+  decryptLetter,
+  verifyLetterIntegrity,
+  clearEncryptionKey,
+  type EncryptedLetter,
+} from './letterEncryption';
+
+export {
+  saveLetter,
+  getLetter,
+  getAllLetters,
+  getLetterMetadata,
+  deleteLetter,
+  markLetterViewed,
+  getReadyLetters,
+  getTimeRemaining,
+  type LetterMetadata,
+} from './letterStorage';
+
+export {
+  initializeNotifications,
+  scheduleLetterNotification,
+  cancelLetterNotification,
+  cancelAllLetterNotifications,
+  checkPendingNotifications,
+} from './letterNotifications';
