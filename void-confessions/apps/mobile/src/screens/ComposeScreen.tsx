@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -11,9 +11,51 @@ import {
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import Animated, { FadeIn } from 'react-native-reanimated';
-import { VOID_CONFIG, CONFESSION_MAX_LENGTH, validateConfessionContent } from '@void-confessions/core';
+import * as Localization from 'expo-localization';
+import {
+  VOID_CONFIG,
+  CONFESSION_MAX_LENGTH,
+  validateConfessionContent,
+  detectCrisis,
+  createCrisisResponse,
+  logInterventionMetric,
+  createInterventionMetric,
+  type CrisisLocale,
+  type CrisisResponse,
+} from '@void-confessions/core';
 import { useVoidStore } from '../store';
+import { CrisisResourcesModal } from '../components/CrisisResourcesModal';
 import type { ComposeScreenProps } from '../navigation';
+
+/**
+ * Map device region to crisis locale
+ */
+function getLocaleFromDevice(): CrisisLocale {
+  const region = Localization.getLocales()[0]?.regionCode?.toUpperCase();
+
+  const localeMap: Record<string, CrisisLocale> = {
+    US: 'US',
+    GB: 'UK',
+    UK: 'UK',
+    CA: 'CA',
+    AU: 'AU',
+    NZ: 'NZ',
+    IE: 'IE',
+    DE: 'DE',
+    FR: 'FR',
+    ES: 'ES',
+    IT: 'IT',
+    NL: 'NL',
+    BE: 'BE',
+    IN: 'IN',
+    JP: 'JP',
+    KR: 'KR',
+    BR: 'BR',
+    MX: 'MX',
+  };
+
+  return localeMap[region || ''] || 'INTL';
+}
 
 export function ComposeScreen(): React.JSX.Element {
   const navigation = useNavigation<ComposeScreenProps['navigation']>();
@@ -27,7 +69,44 @@ export function ComposeScreen(): React.JSX.Element {
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Crisis detection state
+  const [crisisResponse, setCrisisResponse] = useState<CrisisResponse | null>(null);
+  const [showCrisisModal, setShowCrisisModal] = useState(false);
+
+  // Get user's locale for crisis resources
+  const userLocale = useMemo(() => getLocaleFromDevice(), []);
+
+  // Check content for crisis indicators in real-time
+  const crisisDetection = useMemo(() => {
+    if (content.length < 10) return null;
+    return detectCrisis(content, userLocale);
+  }, [content, userLocale]);
+
+  // Determine if we should show "Get Help" button
+  const showGetHelp = crisisDetection?.detected || false;
+
+  const handleGetHelp = useCallback(() => {
+    if (!crisisDetection?.detected) return;
+
+    // Create and show crisis response
+    const response = createCrisisResponse(userLocale);
+    setCrisisResponse(response);
+    setShowCrisisModal(true);
+
+    // Log intervention (no content)
+    const metric = createInterventionMetric(crisisDetection, userLocale);
+    if (metric) {
+      logInterventionMetric(metric);
+    }
+  }, [crisisDetection, userLocale]);
+
   const handleSubmit = async () => {
+    // First check for crisis content
+    if (crisisDetection?.detected) {
+      handleGetHelp();
+      return; // Do NOT post the confession
+    }
+
     const validation = validateConfessionContent(content);
     if (!validation.valid) {
       setError(validation.error ?? 'Invalid content');
@@ -38,7 +117,7 @@ export function ComposeScreen(): React.JSX.Element {
     setIsSubmitting(true);
 
     try {
-      // TODO: Call API to create confession
+      // Call API to create confession
       const response = await fetch('http://localhost:3002/confessions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -50,6 +129,13 @@ export function ComposeScreen(): React.JSX.Element {
       });
 
       const data = await response.json();
+
+      // Server-side crisis detection (backup)
+      if (data.crisisDetected) {
+        setCrisisResponse(data);
+        setShowCrisisModal(true);
+        return;
+      }
 
       if (data.success) {
         navigation.replace('Release', {
@@ -67,6 +153,10 @@ export function ComposeScreen(): React.JSX.Element {
     }
   };
 
+  const handleCloseCrisisModal = useCallback(() => {
+    setShowCrisisModal(false);
+  }, []);
+
   return (
     <KeyboardAvoidingView
       style={styles.container}
@@ -74,7 +164,10 @@ export function ComposeScreen(): React.JSX.Element {
     >
       {/* Ambient glow */}
       <View
-        style={[styles.ambientGlow, { backgroundColor: config.colors.primary }]}
+        style={[
+          styles.ambientGlow,
+          { backgroundColor: showGetHelp ? '#2d5a3d' : config.colors.primary },
+        ]}
       />
 
       {/* Header */}
@@ -86,22 +179,37 @@ export function ComposeScreen(): React.JSX.Element {
           <Text style={styles.closeButtonText}>×</Text>
         </TouchableOpacity>
 
-        <Text style={styles.title}>Confess to the Void</Text>
+        <Text style={styles.title}>
+          {showGetHelp ? 'We\'re Here For You' : 'Confess to the Void'}
+        </Text>
 
+        {/* Dynamic button: Get Help or Release */}
         <TouchableOpacity
           style={[
             styles.submitButton,
-            { backgroundColor: config.colors.primary },
-            (!content.trim() || isSubmitting) && styles.submitButtonDisabled,
+            showGetHelp
+              ? styles.getHelpButton
+              : { backgroundColor: config.colors.primary },
+            (!content.trim() || isSubmitting) && !showGetHelp && styles.submitButtonDisabled,
           ]}
-          onPress={handleSubmit}
-          disabled={!content.trim() || isSubmitting}
+          onPress={showGetHelp ? handleGetHelp : handleSubmit}
+          disabled={(!content.trim() || isSubmitting) && !showGetHelp}
         >
           <Text style={styles.submitButtonText}>
-            {isSubmitting ? '...' : 'Release'}
+            {isSubmitting ? '...' : showGetHelp ? '💚 Get Help' : 'Release'}
           </Text>
         </TouchableOpacity>
       </View>
+
+      {/* Crisis notice banner */}
+      {showGetHelp && (
+        <Animated.View entering={FadeIn} style={styles.crisisBanner}>
+          <Text style={styles.crisisBannerText}>
+            It sounds like you might be going through a difficult time.
+            Support is available.
+          </Text>
+        </Animated.View>
+      )}
 
       <ScrollView
         style={styles.scrollView}
@@ -132,7 +240,7 @@ export function ComposeScreen(): React.JSX.Element {
               {content.length}/{CONFESSION_MAX_LENGTH}
             </Text>
 
-            {!isPremium && (
+            {!isPremium && !showGetHelp && (
               <TouchableOpacity
                 onPress={() => navigation.navigate('Premium')}
               >
@@ -144,6 +252,16 @@ export function ComposeScreen(): React.JSX.Element {
           </View>
         </Animated.View>
       </ScrollView>
+
+      {/* Crisis Resources Modal */}
+      {crisisResponse && (
+        <CrisisResourcesModal
+          visible={showCrisisModal}
+          resources={crisisResponse.resources}
+          supportMessage={crisisResponse.supportMessage}
+          onClose={handleCloseCrisisModal}
+        />
+      )}
     </KeyboardAvoidingView>
   );
 }
@@ -188,6 +306,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     borderRadius: 20,
   },
+  getHelpButton: {
+    backgroundColor: '#2d5a3d',
+  },
   submitButtonDisabled: {
     opacity: 0.5,
   },
@@ -195,6 +316,19 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  crisisBanner: {
+    backgroundColor: '#2d5a3d',
+    marginHorizontal: 16,
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 8,
+  },
+  crisisBannerText: {
+    color: '#a8e6a8',
+    fontSize: 14,
+    textAlign: 'center',
+    lineHeight: 20,
   },
   scrollView: {
     flex: 1,
