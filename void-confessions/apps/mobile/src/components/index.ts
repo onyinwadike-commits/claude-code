@@ -12,3 +12,19 @@ export {
   CollectiveCounter,
   WhisperInput,
 } from './void';
+
+// Release animations (premium)
+export {
+  BurnRelease,
+  ShatterRelease,
+  ScreamRelease,
+  DissolveRelease,
+  StormRelease,
+  DriftRelease,
+  RELEASE_ANIMATIONS,
+} from './release';
+export type {
+  ReleaseAnimationProps,
+  ReleaseStyle,
+  ReleaseAnimationConfig,
+} from './release';
