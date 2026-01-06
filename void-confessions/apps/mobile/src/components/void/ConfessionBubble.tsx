@@ -1,5 +1,5 @@
-import React, { useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, Pressable, Dimensions } from 'react-native';
+import React, { useEffect, useCallback, useRef } from 'react';
+import { View, Text, StyleSheet, Dimensions } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -7,24 +7,30 @@ import Animated, {
   withSequence,
   withSpring,
   withDelay,
-  Easing,
   runOnJS,
   interpolate,
   Extrapolation,
 } from 'react-native-reanimated';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import * as Haptics from 'expo-haptics';
 import type { Confession, VoidType, EchoWord } from '@void-confessions/core';
 import { VOID_CONFIG } from '@void-confessions/core';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+
+const LONG_PRESS_DURATION_MS = 1500; // 1.5 seconds for resonance
 
 interface ConfessionBubbleProps {
   confession: Confession;
   voidType: VoidType;
-  index: number;
   onResonate: (id: string) => void;
   onEcho: (id: string, word: EchoWord) => void;
   isGlowing?: boolean;
   echoWord?: EchoWord | null;
+  /** Current Y position for opacity calculation */
+  currentY?: number;
+  /** Screen height for fade calculation */
+  fadeStartY?: number;
 }
 
 const ECHO_WORDS: EchoWord[] = ['same', 'felt', 'brave', 'heard', 'seen', 'lighter', 'strength'];
@@ -32,45 +38,50 @@ const ECHO_WORDS: EchoWord[] = ['same', 'felt', 'brave', 'heard', 'seen', 'light
 export function ConfessionBubble({
   confession,
   voidType,
-  index,
   onResonate,
   onEcho,
   isGlowing = false,
   echoWord = null,
+  currentY = SCREEN_HEIGHT,
+  fadeStartY = 200,
 }: ConfessionBubbleProps): React.JSX.Element {
   const config = VOID_CONFIG[voidType];
 
   // Animation values
-  const translateY = useSharedValue(100);
-  const opacity = useSharedValue(0);
   const scale = useSharedValue(0.9);
+  const opacity = useSharedValue(0);
   const glowIntensity = useSharedValue(0);
   const echoOpacity = useSharedValue(0);
   const echoScale = useSharedValue(0.5);
+  const pressProgress = useSharedValue(0);
+  const isLongPressing = useSharedValue(false);
+
+  // Long press timer ref
+  const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Entrance animation
   useEffect(() => {
-    translateY.value = withDelay(
-      index * 100,
-      withSpring(0, { damping: 15, stiffness: 100 })
-    );
-    opacity.value = withDelay(
-      index * 100,
-      withTiming(1, { duration: 500 })
-    );
-    scale.value = withDelay(
-      index * 100,
-      withSpring(1, { damping: 12, stiffness: 120 })
-    );
+    opacity.value = withTiming(1, { duration: 400 });
+    scale.value = withSpring(1, { damping: 12, stiffness: 120 });
   }, []);
 
   // Glow effect when resonance received
   useEffect(() => {
     if (isGlowing) {
+      // Trigger haptic feedback
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
       glowIntensity.value = withSequence(
-        withTiming(1, { duration: 200 }),
-        withTiming(0.3, { duration: 300 }),
+        withTiming(1, { duration: 150 }),
+        withTiming(0.6, { duration: 200 }),
+        withTiming(0.8, { duration: 150 }),
         withTiming(0, { duration: 500 })
+      );
+
+      // Pulse scale effect
+      scale.value = withSequence(
+        withSpring(1.05, { damping: 8 }),
+        withSpring(1, { damping: 12 })
       );
     }
   }, [isGlowing]);
@@ -90,17 +101,92 @@ export function ConfessionBubble({
     }
   }, [echoWord]);
 
-  const containerStyle = useAnimatedStyle(() => ({
-    transform: [
-      { translateY: translateY.value },
-      { scale: scale.value },
-    ],
-    opacity: opacity.value,
-  }));
+  // Callbacks for gestures
+  const triggerResonate = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    onResonate(confession.id);
+  }, [confession.id, onResonate]);
+
+  const triggerEcho = useCallback(() => {
+    const randomWord = ECHO_WORDS[Math.floor(Math.random() * ECHO_WORDS.length)];
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    onEcho(confession.id, randomWord);
+  }, [confession.id, onEcho]);
+
+  const startLongPressTimer = useCallback(() => {
+    // Clear any existing timer
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+    }
+
+    // Start progress animation
+    pressProgress.value = withTiming(1, { duration: LONG_PRESS_DURATION_MS });
+
+    // Set timer for resonance
+    longPressTimerRef.current = setTimeout(() => {
+      runOnJS(triggerResonate)();
+    }, LONG_PRESS_DURATION_MS);
+  }, [triggerResonate, pressProgress]);
+
+  const cancelLongPress = useCallback(() => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+    pressProgress.value = withTiming(0, { duration: 200 });
+  }, [pressProgress]);
+
+  // Cleanup timer on unmount
+  useEffect(() => {
+    return () => {
+      if (longPressTimerRef.current) {
+        clearTimeout(longPressTimerRef.current);
+      }
+    };
+  }, []);
+
+  // Long press gesture for resonance (1.5s hold)
+  const longPressGesture = Gesture.LongPress()
+    .minDuration(LONG_PRESS_DURATION_MS)
+    .onBegin(() => {
+      isLongPressing.value = true;
+      runOnJS(startLongPressTimer)();
+    })
+    .onFinalize((_, success) => {
+      isLongPressing.value = false;
+      if (!success) {
+        runOnJS(cancelLongPress)();
+      }
+    });
+
+  // Tap gesture for echo
+  const tapGesture = Gesture.Tap()
+    .onEnd(() => {
+      runOnJS(triggerEcho)();
+    });
+
+  // Combine gestures - long press takes priority
+  const composedGesture = Gesture.Exclusive(longPressGesture, tapGesture);
+
+  // Container style with opacity fade based on Y position
+  const containerStyle = useAnimatedStyle(() => {
+    // Calculate opacity based on Y position (fade as it approaches top)
+    const positionOpacity = interpolate(
+      currentY,
+      [0, fadeStartY, fadeStartY + 100],
+      [0, 0.3, 1],
+      Extrapolation.CLAMP
+    );
+
+    return {
+      transform: [{ scale: scale.value }],
+      opacity: opacity.value * positionOpacity,
+    };
+  });
 
   const glowStyle = useAnimatedStyle(() => ({
     opacity: glowIntensity.value,
-    transform: [{ scale: 1 + glowIntensity.value * 0.1 }],
+    transform: [{ scale: 1 + glowIntensity.value * 0.15 }],
   }));
 
   const echoStyle = useAnimatedStyle(() => ({
@@ -108,20 +194,12 @@ export function ConfessionBubble({
     transform: [{ scale: echoScale.value }],
   }));
 
-  const handlePress = useCallback(() => {
-    // Trigger resonance animation
-    scale.value = withSequence(
-      withTiming(0.95, { duration: 100 }),
-      withSpring(1, { damping: 10 })
-    );
-    onResonate(confession.id);
-  }, [confession.id, onResonate]);
-
-  const handleLongPress = useCallback(() => {
-    // Show echo options (simplified - just pick random for demo)
-    const randomWord = ECHO_WORDS[Math.floor(Math.random() * ECHO_WORDS.length)];
-    onEcho(confession.id, randomWord);
-  }, [confession.id, onEcho]);
+  // Progress ring style for long press indicator
+  const progressStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(pressProgress.value, [0, 0.1, 1], [0, 1, 1]),
+    transform: [{ scale: interpolate(pressProgress.value, [0, 1], [0.8, 1.1]) }],
+    borderWidth: interpolate(pressProgress.value, [0, 1], [2, 4]),
+  }));
 
   // Calculate time remaining
   const timeRemaining = Math.max(
@@ -136,59 +214,70 @@ export function ConfessionBubble({
         style={[
           styles.glowOverlay,
           glowStyle,
-          { backgroundColor: config.colors.primary },
+          { backgroundColor: config.colors.glow },
         ]}
       />
 
-      <Pressable
-        onPress={handlePress}
-        onLongPress={handleLongPress}
-        style={({ pressed }) => [
-          styles.bubble,
-          { borderColor: config.colors.primary + '30' },
-          pressed && styles.bubblePressed,
+      {/* Long press progress ring */}
+      <Animated.View
+        style={[
+          styles.progressRing,
+          progressStyle,
+          { borderColor: config.colors.primary },
         ]}
-      >
-        {/* Content */}
-        <Text style={styles.content} numberOfLines={4}>
-          {confession.content}
-        </Text>
+      />
 
-        {/* Meta row */}
-        <View style={styles.metaRow}>
-          {/* Resonance count */}
-          <View style={styles.resonanceContainer}>
-            <Text style={[styles.resonanceIcon, { color: config.colors.primary }]}>
-              ◉
-            </Text>
-            <Text style={styles.resonanceCount}>
-              {confession.resonanceCount}
+      <GestureDetector gesture={composedGesture}>
+        <Animated.View
+          style={[
+            styles.bubble,
+            { borderColor: config.colors.primary + '30' },
+          ]}
+        >
+          {/* Content */}
+          <Text style={styles.content} numberOfLines={6}>
+            {confession.content}
+          </Text>
+
+          {/* Meta row */}
+          <View style={styles.metaRow}>
+            {/* Resonance count */}
+            <View style={styles.resonanceContainer}>
+              <Text style={[styles.resonanceIcon, { color: config.colors.primary }]}>
+                ◉
+              </Text>
+              <Text style={styles.resonanceCount}>
+                {confession.resonanceCount}
+              </Text>
+            </View>
+
+            {/* Echoes */}
+            {confession.echoes.length > 0 && (
+              <View style={styles.echoesContainer}>
+                {confession.echoes.slice(0, 3).map((echo) => (
+                  <View
+                    key={echo.word}
+                    style={[styles.echoBadge, { backgroundColor: config.colors.primary + '20' }]}
+                  >
+                    <Text style={[styles.echoText, { color: config.colors.primary }]}>
+                      {echo.word}
+                    </Text>
+                    <Text style={styles.echoCount}>{echo.count}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+
+            {/* Time remaining */}
+            <Text style={styles.timeText}>
+              {timeRemaining > 0 ? `${timeRemaining}m` : '<1m'}
             </Text>
           </View>
 
-          {/* Echoes */}
-          {confession.echoes.length > 0 && (
-            <View style={styles.echoesContainer}>
-              {confession.echoes.slice(0, 3).map((echo) => (
-                <View
-                  key={echo.word}
-                  style={[styles.echoBadge, { backgroundColor: config.colors.primary + '20' }]}
-                >
-                  <Text style={[styles.echoText, { color: config.colors.primary }]}>
-                    {echo.word}
-                  </Text>
-                  <Text style={styles.echoCount}>{echo.count}</Text>
-                </View>
-              ))}
-            </View>
-          )}
-
-          {/* Time remaining */}
-          <Text style={styles.timeText}>
-            {timeRemaining > 0 ? `${timeRemaining}m` : '<1m'}
-          </Text>
-        </View>
-      </Pressable>
+          {/* Hold hint */}
+          <Text style={styles.holdHint}>Hold to resonate</Text>
+        </Animated.View>
+      </GestureDetector>
 
       {/* Echo word popup */}
       {echoWord && (
@@ -209,20 +298,30 @@ const styles = StyleSheet.create({
   },
   glowOverlay: {
     position: 'absolute',
-    top: -10,
-    left: -10,
-    right: -10,
-    bottom: -10,
-    borderRadius: 26,
+    top: -15,
+    left: -15,
+    right: -15,
+    bottom: -15,
+    borderRadius: 30,
+    shadowColor: '#fff',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 20,
+  },
+  progressRing: {
+    position: 'absolute',
+    top: -8,
+    left: -8,
+    right: -8,
+    bottom: -8,
+    borderRadius: 28,
+    borderWidth: 2,
   },
   bubble: {
-    backgroundColor: 'rgba(20, 20, 35, 0.85)',
+    backgroundColor: 'rgba(20, 20, 35, 0.9)',
     borderRadius: 20,
     borderWidth: 1,
     padding: 16,
-  },
-  bubblePressed: {
-    opacity: 0.9,
   },
   content: {
     fontSize: 15,
@@ -275,22 +374,29 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#5a5a6a',
   },
+  holdHint: {
+    fontSize: 10,
+    color: '#4a4a5a',
+    textAlign: 'center',
+    marginTop: 8,
+    fontStyle: 'italic',
+  },
   echoPopup: {
     position: 'absolute',
     top: '50%',
     left: '50%',
-    marginLeft: -40,
-    marginTop: -20,
-    width: 80,
-    height: 40,
+    marginLeft: -50,
+    marginTop: -25,
+    width: 100,
+    height: 50,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-    borderRadius: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.9)',
+    borderRadius: 25,
   },
   echoPopupText: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 18,
+    fontWeight: '700',
     textTransform: 'capitalize',
   },
 });

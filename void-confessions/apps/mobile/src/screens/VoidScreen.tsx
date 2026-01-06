@@ -169,6 +169,12 @@ export function VoidScreen(): React.JSX.Element {
     echoConfession(confessionId, word);
   }, []);
 
+  // Handle confession exiting screen (drifted off top)
+  const handleConfessionExit = useCallback((confessionId: string) => {
+    // Remove from local store when it drifts off screen
+    removeConfession(confessionId);
+  }, [removeConfession]);
+
   const handleCompose = useCallback(() => {
     navigation.navigate('Compose', { voidType });
   }, [navigation, voidType]);
@@ -224,6 +230,7 @@ export function VoidScreen(): React.JSX.Element {
           voidType={voidType}
           onResonate={handleResonate}
           onEcho={handleEcho}
+          onConfessionExit={handleConfessionExit}
           glowingConfessionId={glowingConfessionId}
           echoEvent={echoEvent}
         />
