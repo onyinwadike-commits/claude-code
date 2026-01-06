@@ -16,7 +16,15 @@ export function useVoidSocket(voidType: VoidType | null) {
     setError,
   } = useVoidStore();
 
-  const { playSfx, crossfadeAmbient, playWeatherSound } = useAudioStore();
+  const {
+    crossfadeToVoid,
+    stopAmbient,
+    updateWeather,
+    playConfessionRelease,
+    playResonance,
+    playEcho,
+    playSfx,
+  } = useAudioStore();
 
   // Connect to socket on mount
   useEffect(() => {
@@ -45,32 +53,35 @@ export function useVoidSocket(voidType: VoidType | null) {
   useEffect(() => {
     if (!voidType) return;
 
-    // Join the void
+    // Join the void and start ambient audio
     socketService.joinVoid(voidType);
-    crossfadeAmbient(voidType);
-    playSfx('enter');
+    crossfadeToVoid(voidType);
 
     // Set up void-specific listeners
     const unsubConfession = socketService.on('confession:new', (confession: Confession) => {
       addConfession(confession);
-      playSfx('whisper');
+      // Play subtle sound for new confession
+      playSfx('hover', { volume: 0.3 });
     });
 
     const unsubResonance = socketService.on(
       'confession:resonance',
       (data: { confessionId: string; count: number }) => {
         updateConfessionResonance(data.confessionId, 1);
-        playSfx('resonate');
+        playResonance();
+      }
+    );
+
+    const unsubEcho = socketService.on(
+      'confession:echo',
+      (data: { confessionId: string; echoCount: number }) => {
+        playEcho();
       }
     );
 
     const unsubWeather = socketService.on('weather:update', (weather: WeatherState) => {
       setWeather(weather);
-      if (weather.state === 'storm') {
-        playWeatherSound('storm');
-      } else if (weather.state === 'rain') {
-        playWeatherSound('rain');
-      }
+      updateWeather(weather);
     });
 
     const unsubCollective = socketService.on('collective:update', (count: number) => {
@@ -79,9 +90,10 @@ export function useVoidSocket(voidType: VoidType | null) {
 
     return () => {
       socketService.leaveVoid(voidType);
-      playSfx('exit');
+      stopAmbient();
       unsubConfession();
       unsubResonance();
+      unsubEcho();
       unsubWeather();
       unsubCollective();
     };
@@ -91,9 +103,12 @@ export function useVoidSocket(voidType: VoidType | null) {
     updateConfessionResonance,
     setWeather,
     setCollectiveCount,
-    crossfadeAmbient,
+    crossfadeToVoid,
+    stopAmbient,
+    updateWeather,
+    playResonance,
+    playEcho,
     playSfx,
-    playWeatherSound,
   ]);
 
   // Actions
@@ -101,14 +116,15 @@ export function useVoidSocket(voidType: VoidType | null) {
     (content: string, releaseStyle?: string) => {
       if (!voidType) return;
       socketService.submitConfession(content, voidType, releaseStyle);
-      playSfx('release');
+      playConfessionRelease();
     },
-    [voidType, playSfx]
+    [voidType, playConfessionRelease]
   );
 
   const resonateConfession = useCallback(
     (confessionId: string) => {
       socketService.resonateConfession(confessionId);
+      // Sound is played when server broadcasts the resonance
     },
     []
   );
@@ -116,9 +132,9 @@ export function useVoidSocket(voidType: VoidType | null) {
   const echoConfession = useCallback(
     (confessionId: string) => {
       socketService.echoConfession(confessionId);
-      playSfx('echo');
+      // Sound is played when server broadcasts the echo
     },
-    [playSfx]
+    []
   );
 
   return {
