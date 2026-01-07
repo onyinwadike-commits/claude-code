@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -11,6 +11,7 @@ import { WeatherDisplay } from '@/components/WeatherDisplay';
 import { CollectiveCounter } from '@/components/CollectiveCounter';
 import { useVoidStore } from '@/store/voidStore';
 import { useVoidSocket } from '@/hooks/useVoidSocket';
+import { useDemoMode } from '@/hooks/useDemoMode';
 import type { VoidType } from '@void-confessions/core';
 
 const VALID_VOIDS: VoidType[] = ['grief', 'rage', 'guilt', 'longing', 'relief'];
@@ -27,6 +28,10 @@ interface VoidPageProps {
   params: { type: string };
 }
 
+// Check if we should use demo mode (no backend available)
+const USE_DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE === 'true' ||
+  typeof window !== 'undefined' && !process.env.NEXT_PUBLIC_API_URL;
+
 export default function VoidPage({ params }: VoidPageProps) {
   const voidType = params.type as VoidType;
 
@@ -41,11 +46,18 @@ export default function VoidPage({ params }: VoidPageProps) {
     confessions,
     weather,
     collectiveCount,
-    isConnected,
+    isConnected: storeConnected,
     removeConfession,
   } = useVoidStore();
 
-  const { submitConfession, resonateConfession, echoConfession } = useVoidSocket(voidType);
+  // Use demo mode if no backend, otherwise use real socket
+  const demoMode = useDemoMode(USE_DEMO_MODE ? voidType : null);
+  const socketMode = useVoidSocket(USE_DEMO_MODE ? null : voidType);
+
+  // Pick the active mode
+  const { submitConfession, resonateConfession, echoConfession } = USE_DEMO_MODE ? demoMode : socketMode;
+  const isDemoMode = USE_DEMO_MODE;
+  const isConnected = USE_DEMO_MODE ? false : storeConnected;
 
   // Set current void on mount
   useEffect(() => {
@@ -107,26 +119,32 @@ export default function VoidPage({ params }: VoidPageProps) {
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               className={`flex items-center gap-2 text-sm px-3 py-1.5 rounded-full backdrop-blur-sm ${
-                isConnected
-                  ? 'bg-relief-900/30 text-relief-300'
-                  : 'bg-rage-900/30 text-rage-300'
+                isDemoMode
+                  ? 'bg-longing-900/30 text-longing-300'
+                  : isConnected
+                    ? 'bg-relief-900/30 text-relief-300'
+                    : 'bg-rage-900/30 text-rage-300'
               }`}
             >
               <motion.span
                 className={`w-2 h-2 rounded-full ${
-                  isConnected ? 'bg-relief-400' : 'bg-rage-400'
+                  isDemoMode
+                    ? 'bg-longing-400'
+                    : isConnected
+                      ? 'bg-relief-400'
+                      : 'bg-rage-400'
                 }`}
                 animate={{
-                  scale: isConnected ? [1, 1.2, 1] : 1,
-                  opacity: isConnected ? 1 : [1, 0.5, 1],
+                  scale: isDemoMode ? [1, 1.1, 1] : isConnected ? [1, 1.2, 1] : 1,
+                  opacity: isDemoMode ? [0.7, 1, 0.7] : isConnected ? 1 : [1, 0.5, 1],
                 }}
                 transition={{
                   repeat: Infinity,
-                  duration: isConnected ? 2 : 1,
+                  duration: isDemoMode ? 3 : isConnected ? 2 : 1,
                 }}
               />
               <span className="text-xs font-medium">
-                {isConnected ? 'Connected' : 'Connecting...'}
+                {isDemoMode ? 'Demo Mode' : isConnected ? 'Connected' : 'Connecting...'}
               </span>
             </motion.div>
 
