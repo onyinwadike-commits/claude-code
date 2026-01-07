@@ -8,6 +8,17 @@ module.exports = {
   theme: {
     extend: {
       colors: {
+        // Semantic colors using CSS variables
+        background: 'hsl(var(--background))',
+        foreground: 'hsl(var(--foreground))',
+        muted: {
+          DEFAULT: 'hsl(var(--muted))',
+          foreground: 'hsl(var(--muted-foreground))',
+        },
+        accent: {
+          DEFAULT: 'hsl(var(--accent))',
+          foreground: 'hsl(var(--accent-foreground))',
+        },
         // Void types
         grief: {
           50: '#f0f4ff',
