@@ -127,6 +127,15 @@ export const useAudioStore = create<AudioState>()(
           const state = get();
           if (state.isInitialized || state.isLoading || !state.isEnabled) return;
 
+          // In demo/dev mode without audio files, skip initialization silently
+          const skipAudio = process.env.NEXT_PUBLIC_SKIP_AUDIO === 'true' ||
+            !process.env.NEXT_PUBLIC_API_URL;
+
+          if (skipAudio) {
+            set({ isInitialized: true, isLoading: false });
+            return;
+          }
+
           set({ isLoading: true });
 
           try {
@@ -137,18 +146,15 @@ export const useAudioStore = create<AudioState>()(
             const ambientHowls = new Map<VoidType, Howl>();
             const ambientLoadPromises = Object.entries(AUDIO_PATHS.ambient).map(
               ([voidType, path]) => {
-                return new Promise<void>((resolve, reject) => {
+                return new Promise<void>((resolve) => {
                   const howl = new Howl({
                     src: [path],
                     loop: true,
                     volume: 0,
                     preload: true,
-                    html5: true, // Better for long audio
+                    html5: true,
                     onload: () => resolve(),
-                    onloaderror: (_, error) => {
-                      console.warn(`Failed to load ambient: ${voidType}`, error);
-                      resolve(); // Don't fail initialization
-                    },
+                    onloaderror: () => resolve(), // Silent fail
                   });
                   ambientHowls.set(voidType as VoidType, howl);
                 });
@@ -164,10 +170,7 @@ export const useAudioStore = create<AudioState>()(
                   volume: state.sfxVolume,
                   preload: true,
                   onload: () => resolve(),
-                  onloaderror: () => {
-                    console.warn(`Failed to load sfx: ${name}`);
-                    resolve();
-                  },
+                  onloaderror: () => resolve(), // Silent fail
                 });
                 sfxHowls.set(name, howl);
               });
@@ -185,10 +188,7 @@ export const useAudioStore = create<AudioState>()(
                     preload: true,
                     html5: true,
                     onload: () => resolve(),
-                    onloaderror: () => {
-                      console.warn(`Failed to load weather: ${name}`);
-                      resolve();
-                    },
+                    onloaderror: () => resolve(), // Silent fail
                   });
                   weatherHowls.set(name, howl);
                 });
@@ -210,8 +210,8 @@ export const useAudioStore = create<AudioState>()(
               _weatherHowls: weatherHowls,
             });
           } catch (error) {
-            console.error('Audio initialization failed:', error);
-            set({ isLoading: false });
+            // Silent fail - audio is optional
+            set({ isInitialized: true, isLoading: false });
           }
         },
 

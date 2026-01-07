@@ -26,8 +26,13 @@ export function useVoidSocket(voidType: VoidType | null) {
     playSfx,
   } = useAudioStore();
 
-  // Connect to socket on mount
+  // Only connect to socket if voidType is provided (not in demo mode)
   useEffect(() => {
+    // Skip socket connection if no voidType (we're in demo mode)
+    if (!voidType) {
+      return;
+    }
+
     const socket = socketService.connect();
 
     const unsubConnect = socketService.on('connected', () => {
@@ -46,8 +51,9 @@ export function useVoidSocket(voidType: VoidType | null) {
       unsubConnect();
       unsubDisconnect();
       unsubError();
+      socketService.disconnect();
     };
-  }, [setConnected, setError]);
+  }, [voidType, setConnected, setError]);
 
   // Join/leave void when voidType changes
   useEffect(() => {
