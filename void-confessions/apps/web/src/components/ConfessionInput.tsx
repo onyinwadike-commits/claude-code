@@ -11,14 +11,44 @@ interface ConfessionInputProps {
   placeholder?: string;
 }
 
+const voidAccents: Record<VoidType, { border: string; ring: string; button: string; text: string }> = {
+  grief: {
+    border: 'focus:border-grief-500/50',
+    ring: 'focus:ring-grief-500/20',
+    button: 'from-grief-600 to-grief-700 shadow-grief-500/30',
+    text: 'text-grief-400',
+  },
+  rage: {
+    border: 'focus:border-rage-500/50',
+    ring: 'focus:ring-rage-500/20',
+    button: 'from-rage-600 to-rage-700 shadow-rage-500/30',
+    text: 'text-rage-400',
+  },
+  guilt: {
+    border: 'focus:border-guilt-500/50',
+    ring: 'focus:ring-guilt-500/20',
+    button: 'from-guilt-600 to-guilt-700 shadow-guilt-500/30',
+    text: 'text-guilt-400',
+  },
+  longing: {
+    border: 'focus:border-longing-500/50',
+    ring: 'focus:ring-longing-500/20',
+    button: 'from-longing-600 to-longing-700 shadow-longing-500/30',
+    text: 'text-longing-400',
+  },
+  relief: {
+    border: 'focus:border-relief-500/50',
+    ring: 'focus:ring-relief-500/20',
+    button: 'from-relief-600 to-relief-700 shadow-relief-500/30',
+    text: 'text-relief-400',
+  },
+};
+
 const RELEASE_STYLES = [
   { id: 'default', name: 'Fade', icon: '✨', isPremium: false },
   { id: 'burn', name: 'Burn', icon: '🔥', isPremium: true },
   { id: 'shatter', name: 'Shatter', icon: '❄️', isPremium: true },
-  { id: 'scream', name: 'Scream', icon: '💢', isPremium: true },
   { id: 'dissolve', name: 'Dissolve', icon: '💧', isPremium: true },
-  { id: 'storm', name: 'Storm', icon: '⚡', isPremium: true },
-  { id: 'drift', name: 'Drift', icon: '🍃', isPremium: true },
 ];
 
 export function ConfessionInput({
@@ -31,9 +61,13 @@ export function ConfessionInput({
   const [releaseStyle, setReleaseStyle] = useState('default');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showStyles, setShowStyles] = useState(false);
+  const [isFocused, setIsFocused] = useState(false);
 
+  const accents = voidAccents[voidType];
   const characterCount = content.length;
   const progress = (characterCount / maxLength) * 100;
+  const isNearLimit = progress > 80;
+  const isAtLimit = progress > 95;
 
   const handleSubmit = useCallback(async () => {
     if (!content.trim() || isSubmitting) return;
@@ -58,37 +92,64 @@ export function ConfessionInput({
   );
 
   return (
-    <div className="glass-card p-6 space-y-4">
+    <div className="glass-card p-5 space-y-4">
       {/* Text Input */}
       <div className="relative">
         <textarea
           value={content}
           onChange={(e) => setContent(e.target.value.slice(0, maxLength))}
           onKeyDown={handleKeyDown}
+          onFocus={() => setIsFocused(true)}
+          onBlur={() => setIsFocused(false)}
           placeholder={placeholder}
-          rows={4}
-          className="
-            w-full bg-void-900/50 rounded-xl p-4
-            text-white placeholder-white/40
-            border border-void-700/30 focus:border-void-500/50
-            focus:outline-none focus:ring-2 focus:ring-void-500/20
-            resize-none transition-all
-          "
+          rows={3}
+          className={`
+            w-full bg-white/[0.03] rounded-xl p-4
+            text-white placeholder-white/30
+            border border-white/[0.08]
+            ${accents.border} ${accents.ring}
+            focus:outline-none focus:ring-2
+            focus:bg-white/[0.05]
+            resize-none transition-all duration-200
+            text-body-md leading-relaxed
+          `}
         />
 
         {/* Character counter */}
-        <div className="absolute bottom-3 right-3 text-xs text-white/40">
-          <span className={characterCount > maxLength * 0.9 ? 'text-rage-400' : ''}>
-            {characterCount}
-          </span>
-          /{maxLength}
-        </div>
+        <AnimatePresence>
+          {(isFocused || characterCount > 0) && (
+            <motion.div
+              initial={{ opacity: 0, y: 5 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 5 }}
+              className="absolute bottom-3 right-3"
+            >
+              <span
+                className={`text-xs font-medium transition-colors ${
+                  isAtLimit
+                    ? 'text-rage-400'
+                    : isNearLimit
+                    ? 'text-longing-400'
+                    : 'text-white/30'
+                }`}
+              >
+                {characterCount.toLocaleString()}/{maxLength.toLocaleString()}
+              </span>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* Progress bar */}
-      <div className="h-1 bg-void-800 rounded-full overflow-hidden">
+      <div className="h-0.5 bg-white/[0.05] rounded-full overflow-hidden">
         <motion.div
-          className={`h-full ${progress > 90 ? 'bg-rage-500' : 'bg-void-500'}`}
+          className={`h-full rounded-full transition-colors ${
+            isAtLimit
+              ? 'bg-rage-500'
+              : isNearLimit
+              ? 'bg-longing-500'
+              : 'bg-primary-500/50'
+          }`}
           initial={{ width: 0 }}
           animate={{ width: `${Math.min(progress, 100)}%` }}
           transition={{ duration: 0.2 }}
@@ -103,16 +164,16 @@ export function ConfessionInput({
             onClick={() => setShowStyles(!showStyles)}
             className="
               flex items-center gap-2 px-3 py-2
-              bg-void-800/50 rounded-lg
-              text-white/70 hover:text-white
-              border border-void-700/30 hover:border-void-600/50
-              transition-all text-sm
+              bg-white/[0.03] rounded-lg
+              text-white/60 hover:text-white
+              border border-white/[0.08] hover:border-white/[0.12]
+              transition-all text-sm font-medium
             "
           >
             <span>{RELEASE_STYLES.find((s) => s.id === releaseStyle)?.icon}</span>
             <span>{RELEASE_STYLES.find((s) => s.id === releaseStyle)?.name}</span>
             <svg
-              className={`w-4 h-4 transition-transform ${showStyles ? 'rotate-180' : ''}`}
+              className={`w-3.5 h-3.5 transition-transform ${showStyles ? 'rotate-180' : ''}`}
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -124,14 +185,15 @@ export function ConfessionInput({
           <AnimatePresence>
             {showStyles && (
               <motion.div
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
+                initial={{ opacity: 0, y: -8, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -8, scale: 0.95 }}
+                transition={{ duration: 0.15 }}
                 className="
                   absolute bottom-full left-0 mb-2
-                  bg-void-900 rounded-xl p-2
-                  border border-void-700/30
-                  shadow-xl min-w-[160px]
+                  bg-void-900/95 backdrop-blur-xl rounded-xl p-1.5
+                  border border-white/[0.1]
+                  shadow-2xl min-w-[150px]
                   z-10
                 "
               >
@@ -139,25 +201,29 @@ export function ConfessionInput({
                   <button
                     key={style.id}
                     onClick={() => {
-                      setReleaseStyle(style.id);
+                      if (!style.isPremium) {
+                        setReleaseStyle(style.id);
+                      }
                       setShowStyles(false);
                     }}
                     disabled={style.isPremium}
                     className={`
-                      w-full flex items-center gap-2 px-3 py-2 rounded-lg
+                      w-full flex items-center gap-2.5 px-3 py-2 rounded-lg
                       text-left text-sm transition-all
                       ${
                         releaseStyle === style.id
-                          ? 'bg-void-700/50 text-white'
-                          : 'text-white/70 hover:bg-void-800/50 hover:text-white'
+                          ? 'bg-white/10 text-white'
+                          : 'text-white/70 hover:bg-white/5 hover:text-white'
                       }
                       ${style.isPremium ? 'opacity-50 cursor-not-allowed' : ''}
                     `}
                   >
-                    <span>{style.icon}</span>
-                    <span>{style.name}</span>
+                    <span className="text-base">{style.icon}</span>
+                    <span className="font-medium">{style.name}</span>
                     {style.isPremium && (
-                      <span className="ml-auto text-xs text-longing-400">PRO</span>
+                      <span className="ml-auto text-xs bg-primary-500/20 text-primary-300 px-1.5 py-0.5 rounded">
+                        PRO
+                      </span>
                     )}
                   </button>
                 ))}
@@ -170,30 +236,35 @@ export function ConfessionInput({
         <motion.button
           onClick={handleSubmit}
           disabled={!content.trim() || isSubmitting}
-          className="
-            px-6 py-2.5 rounded-xl font-medium
-            bg-void-600 hover:bg-void-500
-            disabled:opacity-50 disabled:cursor-not-allowed
+          className={`
+            px-5 py-2.5 rounded-xl font-medium text-sm
+            bg-gradient-to-r ${accents.button}
+            shadow-lg hover:shadow-xl
+            disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none
             text-white transition-all
             flex items-center gap-2
-          "
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
+          `}
+          whileHover={content.trim() && !isSubmitting ? { scale: 1.02, y: -1 } : {}}
+          whileTap={content.trim() && !isSubmitting ? { scale: 0.98 } : {}}
         >
           {isSubmitting ? (
             <>
               <motion.span
                 animate={{ rotate: 360 }}
                 transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                className="inline-block"
               >
                 ⭐
               </motion.span>
-              Releasing...
+              <span>Releasing...</span>
             </>
           ) : (
             <>
-              Release
-              <span className="text-white/60 text-xs">(⌘↵)</span>
+              <span>Release</span>
+              <kbd className="hidden sm:inline-flex items-center gap-0.5 text-[10px] font-mono text-white/40 bg-white/10 px-1.5 py-0.5 rounded">
+                <span>⌘</span>
+                <span>↵</span>
+              </kbd>
             </>
           )}
         </motion.button>

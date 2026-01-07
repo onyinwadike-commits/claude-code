@@ -40,16 +40,17 @@ const WEATHER_CONFIG: Record<
   },
 };
 
-const voidGlows: Record<VoidType, string> = {
-  grief: 'shadow-grief-500/30',
-  rage: 'shadow-rage-500/30',
-  guilt: 'shadow-guilt-500/30',
-  longing: 'shadow-longing-500/30',
-  relief: 'shadow-relief-500/30',
+const voidStyles: Record<VoidType, { glow: string; bar: string }> = {
+  grief: { glow: 'shadow-grief-500/20', bar: 'bg-grief-400' },
+  rage: { glow: 'shadow-rage-500/20', bar: 'bg-rage-400' },
+  guilt: { glow: 'shadow-guilt-500/20', bar: 'bg-guilt-400' },
+  longing: { glow: 'shadow-longing-500/20', bar: 'bg-longing-400' },
+  relief: { glow: 'shadow-relief-500/20', bar: 'bg-relief-400' },
 };
 
 export function WeatherDisplay({ weather, voidType }: WeatherDisplayProps) {
   const config = WEATHER_CONFIG[weather.state];
+  const styles = voidStyles[voidType];
 
   // Calculate time until next weather change
   const timeUntilChange = useMemo(() => {
@@ -75,8 +76,11 @@ export function WeatherDisplay({ weather, voidType }: WeatherDisplayProps) {
       animate={{ opacity: 1, x: 0 }}
       transition={{ delay: 0.3 }}
       className={`
-        glass-card px-4 py-3 min-w-[180px]
-        ${weather.state === 'storm' ? voidGlows[voidType] + ' shadow-lg' : ''}
+        px-4 py-3 min-w-[180px] rounded-xl
+        bg-white/[0.03] backdrop-blur-sm
+        border border-white/[0.08]
+        ${weather.state === 'storm' ? styles.glow + ' shadow-lg border-white/[0.12]' : ''}
+        transition-all duration-300
       `}
     >
       {/* Header with icon and label */}
@@ -100,10 +104,8 @@ export function WeatherDisplay({ weather, voidType }: WeatherDisplayProps) {
               <motion.span
                 animate={{ opacity: [1, 0.5, 1] }}
                 transition={{ duration: 0.5, repeat: Infinity }}
-                className="text-xs text-rage-400"
-              >
-                ●
-              </motion.span>
+                className="w-1.5 h-1.5 rounded-full bg-rage-400"
+              />
             )}
           </div>
           <p className="text-white/40 text-xs">{config.description}</p>
@@ -112,13 +114,13 @@ export function WeatherDisplay({ weather, voidType }: WeatherDisplayProps) {
 
       {/* Intensity bar */}
       <div className="mt-3 flex items-center gap-2">
-        <span className="text-white/40 text-xs w-14">Intensity</span>
+        <span className="text-white/30 text-xs font-medium w-14">Intensity</span>
         <div className="flex gap-1">
           {intensityBars.map((filled, i) => (
             <motion.div
               key={i}
-              className={`w-4 h-1.5 rounded-full ${
-                filled ? 'bg-white/60' : 'bg-white/20'
+              className={`w-3.5 h-1 rounded-full transition-colors ${
+                filled ? styles.bar + ' opacity-80' : 'bg-white/10'
               }`}
               animate={
                 filled && weather.state === 'storm'
@@ -137,7 +139,7 @@ export function WeatherDisplay({ weather, voidType }: WeatherDisplayProps) {
 
       {/* Time until change */}
       {timeUntilChange && (
-        <div className="mt-2 flex items-center gap-2 text-xs text-white/30">
+        <div className="mt-2 flex items-center gap-1.5 text-xs text-white/25">
           <svg
             className="w-3 h-3"
             fill="none"

@@ -16,12 +16,12 @@ import type { VoidType } from '@void-confessions/core';
 
 const VALID_VOIDS: VoidType[] = ['grief', 'rage', 'guilt', 'longing', 'relief'];
 
-const VOID_INFO: Record<VoidType, { name: string; icon: string; tagline: string }> = {
-  grief: { name: 'Grief', icon: '🌊', tagline: 'Release your sorrow into the deep' },
-  rage: { name: 'Rage', icon: '🔥', tagline: 'Let your anger burn away' },
-  guilt: { name: 'Guilt', icon: '🌫️', tagline: 'Confess and find absolution' },
-  longing: { name: 'Longing', icon: '🍂', tagline: 'Whisper your desires to the wind' },
-  relief: { name: 'Relief', icon: '🌿', tagline: 'Celebrate your liberation' },
+const VOID_INFO: Record<VoidType, { name: string; icon: string; tagline: string; gradient: string }> = {
+  grief: { name: 'Grief', icon: '🌊', tagline: 'Release your sorrow into the deep', gradient: 'from-grief-400 to-grief-600' },
+  rage: { name: 'Rage', icon: '🔥', tagline: 'Let your anger burn away', gradient: 'from-rage-400 to-rage-600' },
+  guilt: { name: 'Guilt', icon: '🌫️', tagline: 'Confess and find absolution', gradient: 'from-guilt-400 to-guilt-600' },
+  longing: { name: 'Longing', icon: '🍂', tagline: 'Whisper your desires to the wind', gradient: 'from-longing-400 to-longing-600' },
+  relief: { name: 'Relief', icon: '🌿', tagline: 'Celebrate your liberation', gradient: 'from-relief-400 to-relief-600' },
 };
 
 interface VoidPageProps {
@@ -81,26 +81,26 @@ export default function VoidPage({ params }: VoidPageProps) {
   }, [confessions]);
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-void-950">
+    <main className="relative min-h-screen overflow-hidden bg-background">
       {/* Three.js Particle Background */}
       <VoidBackground voidType={voidType} weather={weather} />
 
       {/* Top Navigation Bar */}
       <header className="fixed top-0 left-0 right-0 z-50">
-        <div className="flex items-start justify-between p-4">
+        <div className="flex items-start justify-between p-5">
           {/* Left side - Back button and Weather */}
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-4">
             {/* Back button */}
             <Link
               href="/"
-              className="group flex items-center gap-2 text-white/60 hover:text-white transition-colors"
+              className="group inline-flex items-center gap-2 text-white/50 hover:text-white transition-colors"
             >
               <motion.div
-                whileHover={{ x: -3 }}
-                className="flex items-center gap-2"
+                whileHover={{ x: -2 }}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/[0.03] border border-white/[0.08] hover:bg-white/[0.05] hover:border-white/[0.12] transition-all"
               >
                 <svg
-                  className="w-5 h-5"
+                  className="w-4 h-4"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -112,7 +112,7 @@ export default function VoidPage({ params }: VoidPageProps) {
                     d="M15 19l-7-7 7-7"
                   />
                 </svg>
-                <span className="text-sm font-medium">Exit Void</span>
+                <span className="text-sm font-medium">Exit</span>
               </motion.div>
             </Link>
 
@@ -121,21 +121,21 @@ export default function VoidPage({ params }: VoidPageProps) {
           </div>
 
           {/* Right side - Counter and Connection */}
-          <div className="flex flex-col items-end gap-3">
+          <div className="flex flex-col items-end gap-4">
             {/* Connection status */}
             <motion.div
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
-              className={`flex items-center gap-2 text-sm px-3 py-1.5 rounded-full backdrop-blur-sm ${
+              className={`flex items-center gap-2 text-xs font-medium px-3 py-1.5 rounded-full backdrop-blur-sm border ${
                 isDemoMode
-                  ? 'bg-longing-900/30 text-longing-300'
+                  ? 'bg-longing-500/10 border-longing-500/20 text-longing-300'
                   : isConnected
-                    ? 'bg-relief-900/30 text-relief-300'
-                    : 'bg-rage-900/30 text-rage-300'
+                    ? 'bg-relief-500/10 border-relief-500/20 text-relief-300'
+                    : 'bg-rage-500/10 border-rage-500/20 text-rage-300'
               }`}
             >
               <motion.span
-                className={`w-2 h-2 rounded-full ${
+                className={`w-1.5 h-1.5 rounded-full ${
                   isDemoMode
                     ? 'bg-longing-400'
                     : isConnected
@@ -151,7 +151,7 @@ export default function VoidPage({ params }: VoidPageProps) {
                   duration: isDemoMode ? 3 : isConnected ? 2 : 1,
                 }}
               />
-              <span className="text-xs font-medium">
+              <span>
                 {isDemoMode ? 'Demo Mode' : isConnected ? 'Connected' : 'Connecting...'}
               </span>
             </motion.div>
@@ -164,16 +164,16 @@ export default function VoidPage({ params }: VoidPageProps) {
 
       {/* Void Title - Center Top */}
       <motion.div
-        initial={{ opacity: 0, y: -30 }}
+        initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.2 }}
-        className="fixed top-20 left-0 right-0 z-40 text-center pointer-events-none"
+        className="fixed top-24 left-0 right-0 z-40 text-center pointer-events-none"
       >
         <motion.span
-          className="text-5xl block mb-2"
+          className="text-5xl block mb-3"
           animate={{
-            y: [0, -5, 0],
-            scale: [1, 1.05, 1],
+            y: [0, -4, 0],
+            scale: [1, 1.03, 1],
           }}
           transition={{
             duration: 4,
@@ -183,10 +183,10 @@ export default function VoidPage({ params }: VoidPageProps) {
         >
           {info.icon}
         </motion.span>
-        <h1 className="text-3xl font-bold text-white mb-1">
-          The {info.name} Void
+        <h1 className="text-2xl font-semibold text-white mb-1">
+          The <span className={`bg-gradient-to-r ${info.gradient} bg-clip-text text-transparent`}>{info.name}</span> Void
         </h1>
-        <p className="text-white/50 text-sm">{info.tagline}</p>
+        <p className="text-white/40 text-sm">{info.tagline}</p>
       </motion.div>
 
       {/* Confession River - Full Screen with AnimatePresence */}
@@ -207,26 +207,26 @@ export default function VoidPage({ params }: VoidPageProps) {
 
       {/* Gradient overlay at top for fade effect */}
       <div
-        className="fixed top-0 left-0 right-0 h-40 z-25 pointer-events-none"
+        className="fixed top-0 left-0 right-0 h-48 z-25 pointer-events-none"
         style={{
-          background: 'linear-gradient(to bottom, rgba(10,10,15,0.9) 0%, transparent 100%)',
+          background: 'linear-gradient(to bottom, hsl(260 30% 4% / 0.95) 0%, transparent 100%)',
         }}
       />
 
       {/* Gradient overlay at bottom for input area */}
       <div
-        className="fixed bottom-0 left-0 right-0 h-60 z-25 pointer-events-none"
+        className="fixed bottom-0 left-0 right-0 h-56 z-25 pointer-events-none"
         style={{
-          background: 'linear-gradient(to top, rgba(10,10,15,0.95) 0%, transparent 100%)',
+          background: 'linear-gradient(to top, hsl(260 30% 4% / 0.98) 0%, transparent 100%)',
         }}
       />
 
       {/* Fixed Bottom Input Bar */}
       <motion.div
-        initial={{ opacity: 0, y: 100 }}
+        initial={{ opacity: 0, y: 50 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.4, type: 'spring', damping: 20 }}
-        className="fixed bottom-0 left-0 right-0 z-30 p-4 pb-6"
+        transition={{ delay: 0.4, type: 'spring', damping: 25 }}
+        className="fixed bottom-0 left-0 right-0 z-30 p-5 pb-8"
       >
         <div className="container mx-auto max-w-2xl">
           <ConfessionInput voidType={voidType} onSubmit={submitConfession} />
@@ -236,7 +236,7 @@ export default function VoidPage({ params }: VoidPageProps) {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.8 }}
-            className="text-center text-white/30 text-xs mt-3"
+            className="text-center text-white/30 text-xs mt-4 font-medium"
           >
             Your confession will drift upward and fade into the void
           </motion.p>
