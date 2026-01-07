@@ -28,10 +28,6 @@ interface VoidPageProps {
   params: { type: string };
 }
 
-// Check if we should use demo mode (no backend available)
-const USE_DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE === 'true' ||
-  typeof window !== 'undefined' && !process.env.NEXT_PUBLIC_API_URL;
-
 export default function VoidPage({ params }: VoidPageProps) {
   const voidType = params.type as VoidType;
 
@@ -39,6 +35,18 @@ export default function VoidPage({ params }: VoidPageProps) {
   if (!VALID_VOIDS.includes(voidType)) {
     notFound();
   }
+
+  // Determine if we should use demo mode (client-side only)
+  const [useDemoModeFlag, setUseDemoModeFlag] = useState(true); // Default to demo mode
+
+  useEffect(() => {
+    // Check if we have a backend URL configured
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+    const forceDemoMode = process.env.NEXT_PUBLIC_DEMO_MODE === 'true';
+
+    // Use demo mode if explicitly enabled OR if no API URL is configured
+    setUseDemoModeFlag(forceDemoMode || !apiUrl);
+  }, []);
 
   const info = VOID_INFO[voidType];
   const {
@@ -51,13 +59,13 @@ export default function VoidPage({ params }: VoidPageProps) {
   } = useVoidStore();
 
   // Use demo mode if no backend, otherwise use real socket
-  const demoMode = useDemoMode(USE_DEMO_MODE ? voidType : null);
-  const socketMode = useVoidSocket(USE_DEMO_MODE ? null : voidType);
+  const demoMode = useDemoMode(useDemoModeFlag ? voidType : null);
+  const socketMode = useVoidSocket(useDemoModeFlag ? null : voidType);
 
   // Pick the active mode
-  const { submitConfession, resonateConfession, echoConfession } = USE_DEMO_MODE ? demoMode : socketMode;
-  const isDemoMode = USE_DEMO_MODE;
-  const isConnected = USE_DEMO_MODE ? false : storeConnected;
+  const { submitConfession, resonateConfession, echoConfession } = useDemoModeFlag ? demoMode : socketMode;
+  const isDemoMode = useDemoModeFlag;
+  const isConnected = useDemoModeFlag ? false : storeConnected;
 
   // Set current void on mount
   useEffect(() => {

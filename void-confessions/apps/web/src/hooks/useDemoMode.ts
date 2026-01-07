@@ -83,7 +83,7 @@ function getRandomConfession(voidType: VoidType): Confession {
     content,
     voidType,
     createdAt: new Date().toISOString(),
-    expiresAt: new Date(Date.now() + 60000).toISOString(), // Expires in 1 minute
+    expiresAt: new Date(Date.now() + 60000).toISOString(),
     resonanceCount: Math.floor(Math.random() * 5),
     echoCount: Math.floor(Math.random() * 3),
   };
@@ -95,69 +95,20 @@ function getRandomInterval(): number {
 }
 
 export function useDemoMode(voidType: VoidType | null) {
-  const {
-    addConfession,
-    removeConfession,
-    setCollectiveCount,
-    setWeather,
-    confessions,
-  } = useVoidStore();
+  const addConfession = useVoidStore((state) => state.addConfession);
+  const removeConfession = useVoidStore((state) => state.removeConfession);
+  const setCollectiveCount = useVoidStore((state) => state.setCollectiveCount);
+  const setWeather = useVoidStore((state) => state.setWeather);
+  const collectiveCount = useVoidStore((state) => state.collectiveCount);
 
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const confessionTimeoutsRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
+  const collectiveCountRef = useRef(collectiveCount);
 
-  // Start generating confessions when void type is set
+  // Keep ref in sync with state
   useEffect(() => {
-    if (!voidType) return;
-
-    // Set initial weather and count
-    setWeather({
-      state: 'calm',
-      intensity: 0.5 + Math.random() * 0.3,
-      nextChange: Date.now() + 300000,
-    });
-    setCollectiveCount(Math.floor(10 + Math.random() * 50));
-
-    // Add initial confessions with staggered timing
-    const initialConfessions = 3;
-    for (let i = 0; i < initialConfessions; i++) {
-      setTimeout(() => {
-        if (voidType) {
-          const confession = getRandomConfession(voidType);
-          addConfession(confession);
-          scheduleRemoval(confession.id);
-        }
-      }, i * 1500);
-    }
-
-    // Start interval for new confessions
-    const scheduleNextConfession = () => {
-      intervalRef.current = setTimeout(() => {
-        if (voidType) {
-          const confession = getRandomConfession(voidType);
-          addConfession(confession);
-          scheduleRemoval(confession.id);
-
-          // Increment collective count occasionally
-          if (Math.random() > 0.7) {
-            setCollectiveCount((prev: number) => prev + 1);
-          }
-        }
-        scheduleNextConfession();
-      }, getRandomInterval());
-    };
-
-    scheduleNextConfession();
-
-    // Cleanup
-    return () => {
-      if (intervalRef.current) {
-        clearTimeout(intervalRef.current);
-      }
-      confessionTimeoutsRef.current.forEach((timeout) => clearTimeout(timeout));
-      confessionTimeoutsRef.current.clear();
-    };
-  }, [voidType, addConfession, setWeather, setCollectiveCount]);
+    collectiveCountRef.current = collectiveCount;
+  }, [collectiveCount]);
 
   // Schedule removal of a confession after it drifts up
   const scheduleRemoval = useCallback((id: string) => {
@@ -168,6 +119,79 @@ export function useDemoMode(voidType: VoidType | null) {
 
     confessionTimeoutsRef.current.set(id, timeout);
   }, [removeConfession]);
+
+  // Start generating confessions when void type is set
+  useEffect(() => {
+    if (!voidType) {
+      // Clear any existing intervals/timeouts when disabled
+      if (intervalRef.current) {
+        clearTimeout(intervalRef.current);
+        intervalRef.current = null;
+      }
+      return;
+    }
+
+    console.log('[DemoMode] Starting demo mode for void:', voidType);
+
+    // Set initial weather and count
+    setWeather({
+      state: 'calm',
+      intensity: 0.5 + Math.random() * 0.3,
+      nextChange: Date.now() + 300000,
+    });
+
+    const initialCount = Math.floor(10 + Math.random() * 50);
+    setCollectiveCount(initialCount);
+    collectiveCountRef.current = initialCount;
+
+    // Add initial confessions with staggered timing
+    const initialTimeouts: NodeJS.Timeout[] = [];
+    for (let i = 0; i < 3; i++) {
+      const timeout = setTimeout(() => {
+        const confession = getRandomConfession(voidType);
+        console.log('[DemoMode] Adding initial confession:', confession.content.substring(0, 30));
+        addConfession(confession);
+        scheduleRemoval(confession.id);
+      }, (i + 1) * 1500);
+      initialTimeouts.push(timeout);
+    }
+
+    // Start interval for new confessions
+    const scheduleNextConfession = () => {
+      intervalRef.current = setTimeout(() => {
+        const confession = getRandomConfession(voidType);
+        console.log('[DemoMode] Adding confession:', confession.content.substring(0, 30));
+        addConfession(confession);
+        scheduleRemoval(confession.id);
+
+        // Increment collective count occasionally
+        if (Math.random() > 0.7) {
+          const newCount = collectiveCountRef.current + 1;
+          setCollectiveCount(newCount);
+          collectiveCountRef.current = newCount;
+        }
+
+        scheduleNextConfession();
+      }, getRandomInterval());
+    };
+
+    // Start after initial confessions are added
+    setTimeout(() => {
+      scheduleNextConfession();
+    }, 5000);
+
+    // Cleanup
+    return () => {
+      console.log('[DemoMode] Cleaning up demo mode');
+      initialTimeouts.forEach(clearTimeout);
+      if (intervalRef.current) {
+        clearTimeout(intervalRef.current);
+        intervalRef.current = null;
+      }
+      confessionTimeoutsRef.current.forEach((timeout) => clearTimeout(timeout));
+      confessionTimeoutsRef.current.clear();
+    };
+  }, [voidType, addConfession, setWeather, setCollectiveCount, scheduleRemoval]);
 
   // Submit a confession (local only in demo mode)
   const submitConfession = useCallback(
@@ -185,32 +209,29 @@ export function useDemoMode(voidType: VoidType | null) {
         releaseStyle,
       };
 
+      console.log('[DemoMode] User submitted confession:', content.substring(0, 30));
       addConfession(confession);
       scheduleRemoval(confession.id);
 
       // Increment collective count
-      setCollectiveCount((prev: number) => prev + 1);
+      const newCount = collectiveCountRef.current + 1;
+      setCollectiveCount(newCount);
+      collectiveCountRef.current = newCount;
     },
     [voidType, addConfession, scheduleRemoval, setCollectiveCount]
   );
 
   // Resonate (just increment locally in demo mode)
-  const resonateConfession = useCallback(
-    (confessionId: string) => {
-      const { updateConfessionResonance } = useVoidStore.getState();
-      updateConfessionResonance(confessionId, 1);
-    },
-    []
-  );
+  const resonateConfession = useCallback((confessionId: string) => {
+    const { updateConfessionResonance } = useVoidStore.getState();
+    updateConfessionResonance(confessionId, 1);
+  }, []);
 
-  // Echo (just increment locally in demo mode)
-  const echoConfession = useCallback(
-    (confessionId: string) => {
-      // In demo mode, just add a small visual feedback
-      // The actual echo count isn't tracked in the store currently
-    },
-    []
-  );
+  // Echo (visual feedback only in demo mode)
+  const echoConfession = useCallback((confessionId: string) => {
+    // In demo mode, just log it
+    console.log('[DemoMode] Echo confession:', confessionId);
+  }, []);
 
   return {
     isDemoMode: true,
