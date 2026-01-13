@@ -1,0 +1,302 @@
+// Integration tests for Feedback API routes
+import { NextRequest } from 'next/server';
+import { GET, POST } from '@/app/api/feedback/route';
+import { GET as getById, PATCH, DELETE } from '@/app/api/feedback/[id]/route';
+import { GET as getAnalytics } from '@/app/api/feedback/analytics/route';
+
+// Helper to create mock request
+const createMockRequest = (
+  url: string,
+  options: RequestInit = {}
+): NextRequest => {
+  return new NextRequest(new URL(url, 'http://localhost:3000'), options);
+};
+
+describe('Feedback API Routes', () => {
+  describe('GET /api/feedback', () => {
+    it('returns a list of feedback', async () => {
+      const request = createMockRequest('/api/feedback');
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.success).toBe(true);
+      expect(Array.isArray(data.data)).toBe(true);
+      expect(data.pagination).toBeDefined();
+    });
+
+    it('supports category filter', async () => {
+      const request = createMockRequest('/api/feedback?category=ai-accuracy');
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      data.data.forEach((item: any) => {
+        expect(item.category).toBe('ai-accuracy');
+      });
+    });
+
+    it('supports status filter', async () => {
+      const request = createMockRequest('/api/feedback?status=new');
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      data.data.forEach((item: any) => {
+        expect(item.status).toBe('new');
+      });
+    });
+
+    it('supports pagination', async () => {
+      const request = createMockRequest('/api/feedback?page=1&limit=5');
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.data.length).toBeLessThanOrEqual(5);
+      expect(data.pagination.page).toBe(1);
+      expect(data.pagination.limit).toBe(5);
+    });
+
+    it('supports sorting', async () => {
+      const request = createMockRequest('/api/feedback?sortBy=most_votes');
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      // Check that items are sorted by votes descending
+      for (let i = 1; i < data.data.length; i++) {
+        expect(data.data[i - 1].votes).toBeGreaterThanOrEqual(data.data[i].votes);
+      }
+    });
+  });
+
+  describe('POST /api/feedback', () => {
+    it('creates new feedback with valid data', async () => {
+      const request = createMockRequest('/api/feedback', {
+        method: 'POST',
+        body: JSON.stringify({
+          type: 'suggestion',
+          category: 'usability',
+          message: 'This is a test feedback message.',
+          userName: 'Test User',
+        }),
+      });
+
+      const response = await POST(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(201);
+      expect(data.success).toBe(true);
+      expect(data.data.message).toBe('This is a test feedback message.');
+      expect(data.data.status).toBe('new');
+    });
+
+    it('returns error for missing required fields', async () => {
+      const request = createMockRequest('/api/feedback', {
+        method: 'POST',
+        body: JSON.stringify({
+          type: 'suggestion',
+          // Missing message and category
+        }),
+      });
+
+      const response = await POST(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(400);
+      expect(data.success).toBe(false);
+      expect(data.error).toContain('Missing required fields');
+    });
+
+    it('auto-detects sentiment', async () => {
+      const request = createMockRequest('/api/feedback', {
+        method: 'POST',
+        body: JSON.stringify({
+          type: 'praise',
+          category: 'ai-accuracy',
+          message: 'Great feature, love it!',
+        }),
+      });
+
+      const response = await POST(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(201);
+      expect(data.data.sentiment).toBe('positive');
+    });
+
+    it('generates title from message if not provided', async () => {
+      const longMessage = 'This is a very long feedback message that should be truncated to create a title automatically.';
+      const request = createMockRequest('/api/feedback', {
+        method: 'POST',
+        body: JSON.stringify({
+          type: 'suggestion',
+          category: 'usability',
+          message: longMessage,
+        }),
+      });
+
+      const response = await POST(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(201);
+      expect(data.data.title.length).toBeLessThanOrEqual(53); // 50 chars + ...
+    });
+  });
+
+  describe('GET /api/feedback/[id]', () => {
+    it('returns a single feedback item', async () => {
+      const request = createMockRequest('/api/feedback/test-id');
+      const response = await getById(request, { params: { id: 'test-id' } });
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.success).toBe(true);
+      expect(data.data.id).toBe('test-id');
+    });
+  });
+
+  describe('PATCH /api/feedback/[id]', () => {
+    it('updates feedback status', async () => {
+      const request = createMockRequest('/api/feedback/test-id', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          status: 'resolved',
+        }),
+      });
+
+      const response = await PATCH(request, { params: { id: 'test-id' } });
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.success).toBe(true);
+      expect(data.data.status).toBe('resolved');
+    });
+
+    it('updates feedback priority', async () => {
+      const request = createMockRequest('/api/feedback/test-id', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          priority: 'critical',
+        }),
+      });
+
+      const response = await PATCH(request, { params: { id: 'test-id' } });
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.data.priority).toBe('critical');
+    });
+
+    it('adds admin response', async () => {
+      const request = createMockRequest('/api/feedback/test-id', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          adminResponse: 'We are working on this.',
+        }),
+      });
+
+      const response = await PATCH(request, { params: { id: 'test-id' } });
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.data.adminResponse).toBe('We are working on this.');
+      expect(data.data.adminRespondedAt).toBeDefined();
+    });
+
+    it('returns error for invalid status', async () => {
+      const request = createMockRequest('/api/feedback/test-id', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          status: 'invalid_status',
+        }),
+      });
+
+      const response = await PATCH(request, { params: { id: 'test-id' } });
+      const data = await response.json();
+
+      expect(response.status).toBe(400);
+      expect(data.success).toBe(false);
+    });
+
+    it('returns error when no valid updates provided', async () => {
+      const request = createMockRequest('/api/feedback/test-id', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          invalidField: 'value',
+        }),
+      });
+
+      const response = await PATCH(request, { params: { id: 'test-id' } });
+      const data = await response.json();
+
+      expect(response.status).toBe(400);
+      expect(data.error).toContain('No valid update fields');
+    });
+  });
+
+  describe('DELETE /api/feedback/[id]', () => {
+    it('deletes feedback', async () => {
+      const request = createMockRequest('/api/feedback/test-id', {
+        method: 'DELETE',
+      });
+
+      const response = await DELETE(request, { params: { id: 'test-id' } });
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.success).toBe(true);
+    });
+  });
+
+  describe('GET /api/feedback/analytics', () => {
+    it('returns analytics data', async () => {
+      const request = createMockRequest('/api/feedback/analytics');
+      const response = await getAnalytics(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.success).toBe(true);
+      expect(data.data).toHaveProperty('totalFeedback');
+      expect(data.data).toHaveProperty('sentimentBreakdown');
+      expect(data.data).toHaveProperty('categoryBreakdown');
+      expect(data.data).toHaveProperty('npsScore');
+    });
+
+    it('supports time range filter', async () => {
+      const request = createMockRequest('/api/feedback/analytics?timeRange=7d');
+      const response = await getAnalytics(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.data.timeRange).toBe('7d');
+    });
+
+    it('includes trend data', async () => {
+      const request = createMockRequest('/api/feedback/analytics');
+      const response = await getAnalytics(request);
+      const data = await response.json();
+
+      expect(Array.isArray(data.data.trendData)).toBe(true);
+      if (data.data.trendData.length > 0) {
+        expect(data.data.trendData[0]).toHaveProperty('date');
+        expect(data.data.trendData[0]).toHaveProperty('count');
+        expect(data.data.trendData[0]).toHaveProperty('avgRating');
+      }
+    });
+
+    it('includes top issues', async () => {
+      const request = createMockRequest('/api/feedback/analytics');
+      const response = await getAnalytics(request);
+      const data = await response.json();
+
+      expect(Array.isArray(data.data.topIssues)).toBe(true);
+      if (data.data.topIssues.length > 0) {
+        expect(data.data.topIssues[0]).toHaveProperty('title');
+        expect(data.data.topIssues[0]).toHaveProperty('count');
+        expect(data.data.topIssues[0]).toHaveProperty('category');
+      }
+    });
+  });
+});
