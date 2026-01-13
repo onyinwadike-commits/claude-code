@@ -1,0 +1,197 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #f8fafc;
+  --foreground: #0f172a;
+  --accent: #0071dc;
+  --accent-light: #78b9e7;
+}
+
+.dark {
+  --background: #0a0f1a;
+  --foreground: #f1f5f9;
+  --accent: #0071dc;
+  --accent-light: #78b9e7;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  color: var(--foreground);
+  background: var(--background);
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  min-height: 100vh;
+}
+
+/* Dark mode gradient background */
+.dark body {
+  background: linear-gradient(135deg, #0a0f1a 0%, #111827 50%, #1a1f2e 100%);
+}
+
+/* Glassmorphism base classes */
+@layer components {
+  .glass {
+    @apply backdrop-blur-xl bg-white/10 border border-white/20 shadow-glass;
+  }
+
+  .glass-dark {
+    @apply backdrop-blur-xl bg-black/20 border border-white/10 shadow-glass;
+  }
+
+  .glass-card {
+    @apply backdrop-blur-xl bg-white/10 border border-white/20 rounded-2xl shadow-glass;
+  }
+
+  .glass-card-dark {
+    @apply backdrop-blur-xl bg-black/20 border border-white/10 rounded-2xl shadow-glass;
+  }
+
+  .glass-button {
+    @apply backdrop-blur-lg bg-white/10 border border-white/20 rounded-xl
+           px-4 py-2 transition-all duration-300
+           hover:bg-white/20 hover:border-white/30 hover:scale-[1.02]
+           active:scale-[0.98];
+  }
+
+  .glass-input {
+    @apply backdrop-blur-lg bg-white/5 border border-white/10 rounded-xl
+           px-4 py-3 outline-none transition-all duration-300
+           focus:bg-white/10 focus:border-white/30 focus:ring-2 focus:ring-walmart-blue/30
+           placeholder:text-white/40;
+  }
+
+  .glass-nav {
+    @apply backdrop-blur-2xl bg-white/5 border-t border-white/10;
+  }
+
+  .glass-header {
+    @apply backdrop-blur-2xl bg-white/5 border-b border-white/10;
+  }
+
+  .glass-modal {
+    @apply backdrop-blur-2xl bg-black/40 border border-white/10 rounded-3xl shadow-glass-lg;
+  }
+
+  /* Section tab styling */
+  .section-tab {
+    @apply relative px-3 py-2 rounded-lg transition-all duration-300
+           text-white/60 hover:text-white hover:bg-white/10;
+  }
+
+  .section-tab.active {
+    @apply text-walmart-yellow bg-white/15;
+  }
+
+  .section-tab.active::after {
+    content: '';
+    @apply absolute bottom-0 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-walmart-yellow;
+  }
+
+  /* Mobile nav item */
+  .mobile-nav-item {
+    @apply flex flex-col items-center justify-center gap-1 p-2
+           text-white/60 transition-all duration-300
+           hover:text-white active:scale-95;
+  }
+
+  .mobile-nav-item.active {
+    @apply text-walmart-yellow;
+  }
+
+  /* Shimmer effect for loading states */
+  .shimmer {
+    @apply relative overflow-hidden;
+  }
+
+  .shimmer::after {
+    content: '';
+    @apply absolute inset-0;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(255, 255, 255, 0.1),
+      transparent
+    );
+    animation: shimmer 2s infinite;
+  }
+
+  @keyframes shimmer {
+    0% {
+      transform: translateX(-100%);
+    }
+    100% {
+      transform: translateX(100%);
+    }
+  }
+
+  /* Walmart spark glow effect */
+  .spark-glow {
+    @apply relative;
+  }
+
+  .spark-glow::before {
+    content: '';
+    @apply absolute -inset-1 rounded-full opacity-50 blur-md;
+    background: linear-gradient(135deg, #ffc220, #ff9500);
+  }
+
+  /* Status indicators */
+  .status-dot {
+    @apply w-2 h-2 rounded-full;
+  }
+
+  .status-online {
+    @apply bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)];
+  }
+
+  .status-warning {
+    @apply bg-yellow-500 shadow-[0_0_8px_rgba(234,179,8,0.6)];
+  }
+
+  .status-offline {
+    @apply bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)];
+  }
+}
+
+/* Scrollbar styling for webkit browsers */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-white/20 rounded-full;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-white/30;
+}
+
+/* Firefox scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+/* Prevent text selection on nav items */
+.no-select {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+/* Safe area insets for mobile */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
