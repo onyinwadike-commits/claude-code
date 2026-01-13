@@ -1,11 +1,13 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { useAppStore } from '@/stores/useAppStore';
 import { SECTIONS, getSectionByKey } from '@/data/stores';
 import { SectionIcon } from '@/components';
-import { MapPin, Phone, Building2, Users, TrendingUp, Clock, AlertTriangle } from 'lucide-react';
+import { MapPin, Phone, Building2, Users, TrendingUp, Clock, AlertTriangle, FileText, Sparkles } from 'lucide-react';
 
 export default function Home() {
+  const router = useRouter();
   const { selectedStore, activeSection, setStoreSelectorOpen } = useAppStore();
   const currentSection = getSectionByKey(activeSection);
 
@@ -81,6 +83,21 @@ export default function Home() {
               <span className="font-bold text-white">3</span>
             </div>
           </div>
+        </div>
+
+        {/* Generate AI Report Button */}
+        <div className="mt-4 pt-4 border-t border-white/10">
+          <button
+            onClick={() => router.push(`/report/${selectedStore.id}`)}
+            className="w-full sm:w-auto px-6 py-3 bg-gradient-to-r from-walmart-blue to-purple-600 hover:from-walmart-darkBlue hover:to-purple-700 text-white font-semibold rounded-xl transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2 shadow-lg"
+          >
+            <Sparkles size={18} />
+            <span>Generate AI Report</span>
+            <FileText size={18} />
+          </button>
+          <p className="text-xs text-white/40 mt-2">
+            Powered by 6 AI models: Perplexity, Grok, Gemini, Claude, ChatGPT, DeepSeek
+          </p>
         </div>
       </div>
 
